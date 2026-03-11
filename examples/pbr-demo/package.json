@@ -1,0 +1,17 @@
+{
+  "name": "@engine/pbr-demo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@engine/assets": "workspace:*",
+    "@engine/platform": "workspace:*",
+    "@engine/profiler": "workspace:*",
+    "@engine/renderer-webgpu": "workspace:*"
+  }
+}

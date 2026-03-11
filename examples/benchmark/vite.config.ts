@@ -10,6 +10,7 @@ export default defineConfig({
       '@engine/scheduler': resolve(__dirname, '../../packages/scheduler/src'),
       '@engine/profiler': resolve(__dirname, '../../packages/profiler/src'),
       '@engine/renderer-webgpu': resolve(__dirname, '../../packages/renderer-webgpu/src'),
+      '@engine/streaming': resolve(__dirname, '../../packages/streaming/src'),
       '@engine/core': resolve(__dirname, '../../packages/core-runtime/src'),
     },
   },

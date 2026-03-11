@@ -1,1 +1,1 @@
-export { Engine, type EngineOptions } from './engine.js';
+export { Engine, type EngineOptions, type PBRInitOptions } from './engine.js';

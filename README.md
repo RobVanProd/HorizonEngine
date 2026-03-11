@@ -4,6 +4,10 @@
 
 Horizon is a data-oriented game engine built for the modern web platform. It targets WebGPU as the primary rendering backend and uses TypeScript throughout — runtime, tooling, and gameplay systems alike.
 
+## Repository
+
+- GitHub: `https://github.com/RobVanProd/HorizonEngine`
+
 ## Architecture
 
 The engine is organized into isolated subsystem packages:
@@ -17,6 +21,10 @@ The engine is organized into isolated subsystem packages:
 | `@engine/profiler` | CPU timing, GPU profiling, metrics collection |
 | `@engine/renderer-webgpu` | WebGPU device management, render pipelines, WGSL shaders |
 | `@engine/core` | Engine bootstrap and subsystem orchestration |
+| `@engine/audio` | Spatial audio system (WebAudio, 3D positional, ECS integration) |
+| `@engine/ai` | AI integration (LLM command API, ML inference, transports) |
+| `@engine/devtools` | Developer tools (perf dashboard, debug draw, entity inspector) |
+| `@engine/editor` | Scene editor (viewport, hierarchy, properties, assets, gizmos) |
 
 ## Prerequisites
 
@@ -28,10 +36,41 @@ The engine is organized into isolated subsystem packages:
 
 ```bash
 pnpm install
-pnpm check        # Type-check all packages
+pnpm check         # Type-check all packages
 pnpm test          # Run tests
 pnpm dev           # Start benchmark example dev server
 ```
+
+## Example Apps
+
+```bash
+pnpm dev           # Benchmark scene
+pnpm dev:large     # Large-scene example
+pnpm dev:pbr       # PBR materials demo
+pnpm dev:anim      # Animation + audio + AI demo
+pnpm dev:editor    # Scene editor / Phase 6 vertical slice
+```
+
+## Current Capabilities
+
+- WebGPU renderer with PBR materials, image-based lighting, shadows, and environment maps
+- ECS runtime with transform hierarchy, scheduler phases, and data-oriented component storage
+- Asset pipeline for textures, HDR environments, and glTF scenes with animation support
+- Skeletal animation and skinned rendering
+- Spatial audio integrated into ECS
+- AI command APIs, inference hooks, and transports for agent integration
+- In-engine devtools plus a scene editor with hierarchy, properties, assets, and viewport controls
+
+## Project Layout
+
+```text
+packages/   Engine subsystems
+examples/   Runnable demos and validation apps
+```
+
+## Contributing
+
+Contributions are welcome. See `CONTRIBUTING.md` for development workflow and expectations.
 
 ## Design Principles
 
@@ -45,13 +84,13 @@ pnpm dev           # Start benchmark example dev server
 
 ## Development Roadmap
 
-- **Phase 0** — Foundation and feasibility *(current)*
-- **Phase 1** — GPU-driven rendering prototype
-- **Phase 2** — Runtime and simulation core
-- **Phase 3** — Lighting and materials
-- **Phase 4** — Animation and world systems
-- **Phase 5** — Audio and tooling integration
-- **Phase 6** — Engine vertical slice
+- **Phase 0** — Foundation and feasibility ✓
+- **Phase 1** — GPU-driven rendering prototype ✓
+- **Phase 2** — Runtime and simulation core ✓
+- **Phase 3** — Lighting and materials ✓
+- **Phase 4** — Animation and world systems ✓
+- **Phase 5** — Audio, tooling, and AI integration ✓
+- **Phase 6** — Scene editor and engine vertical slice *(current)*
 
 ## Internal Design Mantra
 
@@ -59,4 +98,4 @@ pnpm dev           # Start benchmark example dev server
 
 ## License
 
-MIT
+MIT. See `LICENSE`.

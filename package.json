@@ -8,6 +8,9 @@
     "test:watch": "vitest",
     "dev": "pnpm --filter @engine/benchmark dev",
     "dev:large": "pnpm --filter @engine/large-scene dev",
+    "dev:pbr": "pnpm --filter @engine/pbr-demo dev",
+    "dev:anim": "pnpm --filter @engine/animation-demo dev",
+    "dev:editor": "pnpm --filter @engine/editor-demo dev",
     "build": "tsc --build",
     "clean": "rm -rf packages/*/dist examples/*/dist"
   },

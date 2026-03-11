@@ -8,7 +8,8 @@ import depthCopySource from './shaders/depth-copy.wgsl?raw';
 import hzbReduceSource from './shaders/hzb-reduce.wgsl?raw';
 import occlusionCullSource from './shaders/occlusion-cull.wgsl?raw';
 
-const INSTANCE_BOUNDS_STRIDE = 48 * 4;
+// InstanceBounds: mat4(16f) + vec3+f32(4f) + vec4(4f) = 24 floats = 96 bytes
+const INSTANCE_BOUNDS_STRIDE = 24 * 4;
 
 export interface CullStats {
   totalInstances: number;

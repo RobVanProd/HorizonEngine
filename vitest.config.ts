@@ -11,6 +11,8 @@ export default defineConfig({
       '@engine/profiler': resolve(__dirname, 'packages/profiler/src'),
       '@engine/renderer-webgpu': resolve(__dirname, 'packages/renderer-webgpu/src'),
       '@engine/visibility': resolve(__dirname, 'packages/visibility/src'),
+      '@engine/assets': resolve(__dirname, 'packages/assets/src'),
+      '@engine/streaming': resolve(__dirname, 'packages/streaming/src'),
       '@engine/core': resolve(__dirname, 'packages/core-runtime/src'),
     },
   },

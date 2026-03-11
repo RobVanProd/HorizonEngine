@@ -9,7 +9,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@engine/ecs": "workspace:*",
     "@engine/platform": "workspace:*",
-    "@engine/profiler": "workspace:*"
+    "@engine/profiler": "workspace:*",
+    "@engine/scheduler": "workspace:*"
   }
 }

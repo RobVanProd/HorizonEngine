@@ -19,17 +19,55 @@ export interface GPUContext {
   destroy(): void;
 }
 
-export async function createGPUContext(options: GPUContextOptions): Promise<GPUContext> {
+/**
+ * Attempt to acquire a GPUAdapter with progressive fallbacks:
+ *   1. Requested powerPreference (default: high-performance)
+ *   2. No preference
+ *   3. Low-power
+ *   4. Force software/fallback adapter
+ */
+async function acquireAdapter(powerPreference?: GPUPowerPreference): Promise<GPUAdapter> {
   if (!navigator.gpu) {
-    throw new Error('WebGPU not supported');
+    throw new Error('WebGPU API not available (navigator.gpu is undefined)');
   }
 
-  const adapter = await navigator.gpu.requestAdapter({
-    powerPreference: options.powerPreference ?? 'high-performance',
-  });
-  if (!adapter) {
-    throw new Error('Failed to obtain GPUAdapter');
+  const attempts: Array<{ label: string; opts: GPURequestAdapterOptions }> = [
+    { label: `powerPreference="${powerPreference ?? 'high-performance'}"`, opts: { powerPreference: powerPreference ?? 'high-performance' } },
+    { label: 'no preference', opts: {} },
+    { label: 'low-power', opts: { powerPreference: 'low-power' } },
+    { label: 'forceFallbackAdapter (software)', opts: { forceFallbackAdapter: true } },
+  ];
+
+  for (const { label, opts } of attempts) {
+    try {
+      console.log(`[GPU] Trying adapter: ${label}`);
+      const adapter = await navigator.gpu.requestAdapter(opts);
+      if (adapter) {
+        console.log(`[GPU] Acquired adapter via: ${label}`);
+        try {
+          const info = adapter.info;
+          console.log(`[GPU] Adapter info:`, info);
+        } catch { /* info not always available */ }
+        return adapter;
+      }
+      console.warn(`[GPU] requestAdapter(${label}) returned null`);
+    } catch (e) {
+      console.warn(`[GPU] requestAdapter(${label}) threw:`, e);
+    }
   }
+
+  throw new Error(
+    'Failed to obtain GPUAdapter after all fallback attempts.\n\n' +
+    'Possible fixes:\n' +
+    '  • Linux: launch Chrome with --enable-unsafe-webgpu --enable-features=Vulkan\n' +
+    '  • Verify your GPU drivers support Vulkan: run vulkaninfo in a terminal\n' +
+    '  • Check chrome://gpu for WebGPU status\n' +
+    '  • Try chrome://flags → #enable-unsafe-webgpu → Enabled',
+  );
+}
+
+export async function createGPUContext(options: GPUContextOptions): Promise<GPUContext> {
+  const adapter = await acquireAdapter(options.powerPreference);
 
   const device = await adapter.requestDevice({
     requiredFeatures: options.requiredFeatures,

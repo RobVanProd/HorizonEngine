@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@engine/audio": "workspace:*",
     "@engine/ecs": "workspace:*",
     "@engine/memory": "workspace:*",
     "@engine/platform": "workspace:*",

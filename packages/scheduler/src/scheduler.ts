@@ -36,6 +36,16 @@ export class Scheduler {
     return false;
   }
 
+  removeSystemByLabel(phase: Phase, label: string): boolean {
+    const list = this._phases[phase]!;
+    const idx = list.findIndex(e => e.label === label);
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Execute all phases in order for the current frame.
    */

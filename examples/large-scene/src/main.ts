@@ -225,8 +225,14 @@ async function main() {
     errorBanner.style.display = 'block';
     errorBanner.innerHTML = `
       <h2>Failed to initialize</h2>
-      <p style="margin-top:12px">${err.message}</p>
-      <p style="margin-top:16px;color:#aaa">Requires Chrome 113+ or Edge 113+ with WebGPU.</p>
+      <pre style="margin-top:12px;white-space:pre-wrap;color:#f88">${err.message}</pre>
+      <p style="margin-top:16px;color:#aaa">
+        This demo requires WebGPU.<br><br>
+        <strong>Linux users:</strong> Launch Chrome with:<br>
+        <code style="color:#6cf">google-chrome --enable-unsafe-webgpu --enable-features=Vulkan</code><br><br>
+        Or check <code style="color:#6cf">chrome://gpu</code> for WebGPU status and
+        <code style="color:#6cf">chrome://flags/#enable-unsafe-webgpu</code> to enable it.
+      </p>
     `;
     console.error(err);
   }

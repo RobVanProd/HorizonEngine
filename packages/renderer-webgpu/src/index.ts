@@ -10,3 +10,13 @@ export {
   mat4Scale,
   mat4RotationY,
 } from './math.js';
+
+// Phase 3+4: PBR pipeline with IBL, shadows, skybox
+export { PBRRenderer, type SceneLighting } from './pbr-pipeline.js';
+export { PBRMaterial, type PBRMaterialParams } from './pbr-material.js';
+export { GPUMesh, PBR_VERTEX_LAYOUT, PBR_SKINNED_VERTEX_LAYOUT, type MeshData } from './mesh.js';
+export { LightingState, type DirectionalLight } from './lighting.js';
+export { Environment, type EnvironmentConfig } from './environment.js';
+export { ShadowMap, type ShadowConfig } from './shadow-map.js';
+export { createSphere, createTorus, createPlane } from './procedural.js';
+export { createRenderSystem, type RenderRegistries, type RenderSystemContext } from './render-system.js';

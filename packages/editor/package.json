@@ -1,0 +1,19 @@
+{
+  "name": "@engine/editor",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@engine/ai": "workspace:*",
+    "@engine/assets": "workspace:*",
+    "@engine/audio": "workspace:*",
+    "@engine/core": "workspace:*",
+    "@engine/devtools": "workspace:*",
+    "@engine/ecs": "workspace:*",
+    "@engine/memory": "workspace:*",
+    "@engine/profiler": "workspace:*",
+    "@engine/renderer-webgpu": "workspace:*",
+    "@engine/scheduler": "workspace:*"
+  }
+}

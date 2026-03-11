@@ -1,0 +1,30 @@
+{
+  "name": "@engine/editor-demo",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@engine/memory": "workspace:*",
+    "@engine/ecs": "workspace:*",
+    "@engine/platform": "workspace:*",
+    "@engine/scheduler": "workspace:*",
+    "@engine/profiler": "workspace:*",
+    "@engine/renderer-webgpu": "workspace:*",
+    "@engine/assets": "workspace:*",
+    "@engine/animation": "workspace:*",
+    "@engine/streaming": "workspace:*",
+    "@engine/visibility": "workspace:*",
+    "@engine/core": "workspace:*",
+    "@engine/audio": "workspace:*",
+    "@engine/ai": "workspace:*",
+    "@engine/devtools": "workspace:*",
+    "@engine/editor": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

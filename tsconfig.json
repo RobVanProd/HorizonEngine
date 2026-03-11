@@ -9,7 +9,13 @@
       "@engine/profiler": ["./packages/profiler/src"],
       "@engine/renderer-webgpu": ["./packages/renderer-webgpu/src"],
       "@engine/visibility": ["./packages/visibility/src"],
-      "@engine/core": ["./packages/core-runtime/src"]
+      "@engine/assets": ["./packages/assets/src"],
+      "@engine/streaming": ["./packages/streaming/src"],
+      "@engine/core": ["./packages/core-runtime/src"],
+      "@engine/audio": ["./packages/audio/src"],
+      "@engine/ai": ["./packages/ai/src"],
+      "@engine/devtools": ["./packages/devtools/src"],
+      "@engine/editor": ["./packages/editor/src"]
     }
   },
   "include": [
