@@ -341,7 +341,7 @@ export class PBRRenderer {
     );
   }
 
-  endFrame(): void {
+  endFrame(afterMainPass?: (pass: GPURenderPassEncoder) => void): void {
     const encoder = this._gpu.device.createCommandEncoder();
 
     // Pass 1: Shadow depth
@@ -408,6 +408,7 @@ export class PBRRenderer {
       pass.drawIndexed(dc.mesh.indexCount);
     }
 
+    afterMainPass?.(pass);
     pass.end();
 
     if (this._profilingEnabled && this._gpuProfiler) {

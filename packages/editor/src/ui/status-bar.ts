@@ -10,7 +10,7 @@ export class StatusBar {
     this.root = el('div', {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       height: `${SIZES.statusBarHeight}px`,
-      background: COLORS.bgDark, borderTop: `1px solid ${COLORS.border}`,
+      background: `linear-gradient(180deg, ${COLORS.bg}, ${COLORS.bgDark})`, borderTop: `1px solid ${COLORS.border}`,
       padding: '0 10px', fontSize: FONT.size.xs,
       color: COLORS.textMuted, userSelect: 'none',
     });
@@ -31,9 +31,9 @@ export class StatusBar {
   setCenter(text: string): void { this._center.textContent = text; }
   setRight(text: string): void { this._right.textContent = text; }
 
-  setFps(fps: number): void {
+  setFps(fps: number, extra = 'Horizon Engine v0.6'): void {
     const color = fps >= 55 ? COLORS.success : fps >= 30 ? COLORS.warning : COLORS.error;
-    this._right.innerHTML = `<span style="color:${color}">${Math.round(fps)} FPS</span> <span style="margin-left:8px">Horizon Engine v0.6</span>`;
+    this._right.innerHTML = `<span style="color:${color};font-family:${FONT.mono}">${Math.round(fps)} FPS</span> <span style="margin-left:8px;font-family:${FONT.mono}">${extra}</span>`;
   }
 
   destroy(): void {

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="960" height="360" viewBox="0 0 960 360">
+<defs>
+<linearGradient x1="80" y1="160" x2="400" y2="160" gradientUnits="userSpaceOnUse" id="d0">
+<stop offset="0" stop-color="#6ae6ff" stop-opacity="1" />
+<stop offset="1" stop-color="#ffd077" stop-opacity="1" />
+</linearGradient>
+<linearGradient x1="70" y1="30" x2="410" y2="340" gradientUnits="userSpaceOnUse" id="d1">
+<stop offset="0" stop-color="#8cf1ff" stop-opacity="1" />
+<stop offset="0.55" stop-color="#73c3ff" stop-opacity="1" />
+<stop offset="1" stop-color="#ffb54d" stop-opacity="1" />
+</linearGradient>
+</defs>
+<g opacity="1.0">
+<circle cx="240" cy="192" r="150.0" fill="#52c9ff" fill-opacity="0.2" />
+<circle cx="240" cy="192" r="96.0" fill="#ffb347" fill-opacity="0.12" />
+<rect x="94.0" y="176" width="292.0" height="8" rx="4" ry="4" fill="url(#d0)" fill-opacity="0.95" />
+<path d="M62.0,62.0 L156.0,-4.0 L324.0,-4.0 L418.0,62.0 L390.0,300.0 L90.0,300.0 Z" fill="#07111d" fill-opacity="0.44" stroke="url(#d1)" stroke-width="6" stroke-opacity="0.92" />
+<path d="M 108.0 178 Q 240 92.0 372.0 178" stroke="url(#d0)" stroke-width="10" stroke-opacity="0.95" fill="none" />
+<path d="M 132.0 168 Q 240 97.0 348.0 168" stroke="url(#d0)" stroke-width="8" stroke-opacity="0.95" fill="none" />
+<path d="M 156.0 158 Q 240 102.0 324.0 158" stroke="url(#d0)" stroke-width="6" stroke-opacity="0.95" fill="none" />
+<path d="M128.0,88.0 L182.0,88.0 L168.0,214.0 L114.0,214.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M298.0,88.0 L352.0,88.0 L366.0,214.0 L312.0,214.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M166.0,162.0 L314.0,162.0 L302.0,206.0 L178.0,206.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M166.0,214.0 L220.0,214.0 L188.0,320.0 L144.0,320.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M260.0,214.0 L314.0,214.0 L336.0,320.0 L292.0,320.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+</g>
+<text x="470" y="195" font-size="82" font-family="Ubuntu Condensed" font-weight="700" fill="#f7fbff" stroke="#86dfff" stroke-width="0.4" stroke-opacity="0.22" letter-spacing="7">HORIZON</text>
+<text x="474" y="235" font-size="18" font-family="DejaVu Sans Mono" fill="#8fe9ff" fill-opacity="0.85" letter-spacing="4.5">TYPESCRIPT GAME ENGINE</text>
+</svg>

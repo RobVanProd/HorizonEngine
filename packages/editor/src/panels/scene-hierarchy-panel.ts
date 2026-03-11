@@ -1,5 +1,5 @@
 import type { Engine } from '@engine/core';
-import { Parent, MeshRef, SkeletonRef, Visible, AudioSource, MaterialRef, LocalTransform } from '@engine/ecs';
+import { Parent, MeshRef, SkeletonRef, Visible, AudioSource, MaterialRef, LocalTransform, WorldMatrix } from '@engine/ecs';
 import { Selection } from '../picking/selection.js';
 import { COLORS, FONT, el, esc } from '../ui/theme.js';
 import { Icons } from '../ui/icons.js';
@@ -19,10 +19,16 @@ export class SceneHierarchyPanel {
   private _tree: HTMLDivElement;
   private _filter = '';
   private _collapsed = new Set<number>();
+  private _dirty = true;
+  private _lastSignature = '';
 
   constructor(engine: Engine, selection: Selection) {
     this._engine = engine;
     this._selection = selection;
+    this._selection.onChange(() => {
+      this._dirty = true;
+      this._renderIfNeeded();
+    });
 
     this.root = el('div', {
       display: 'flex', flexDirection: 'column', height: '100%',
@@ -42,7 +48,8 @@ export class SceneHierarchyPanel {
     });
     this._search.addEventListener('input', () => {
       this._filter = this._search.value.toLowerCase();
-      this._render();
+      this._dirty = true;
+      this._renderIfNeeded();
     });
     headerRow.appendChild(this._search);
 
@@ -51,10 +58,20 @@ export class SceneHierarchyPanel {
     addBtn.appendChild(Icons.plus());
     addBtn.addEventListener('click', () => {
       const id = this._engine.world.spawn().id;
-      this._engine.world.addComponent(id, LocalTransform);
+      this._engine.world.addComponent(id, LocalTransform, {
+        px: 0, py: 0, pz: 0, rotY: 0,
+        scaleX: 1, scaleY: 1, scaleZ: 1,
+      });
+      this._engine.world.addComponent(id, WorldMatrix, {
+        m0: 1, m1: 0, m2: 0, m3: 0,
+        m4: 0, m5: 1, m6: 0, m7: 0,
+        m8: 0, m9: 0, m10: 1, m11: 0,
+        m12: 0, m13: 0, m14: 0, m15: 1,
+      });
       this._engine.world.addComponent(id, Visible);
       this._selection.select(id);
-      this._render();
+      this._dirty = true;
+      this._renderIfNeeded();
     });
     headerRow.appendChild(addBtn);
     this.root.appendChild(headerRow);
@@ -64,7 +81,7 @@ export class SceneHierarchyPanel {
   }
 
   update(): void {
-    this._render();
+    this._renderIfNeeded();
   }
 
   private _buildHierarchy(): HNode[] {
@@ -115,7 +132,12 @@ export class SceneHierarchyPanel {
     return roots;
   }
 
-  private _render(): void {
+  private _renderIfNeeded(): void {
+    const signature = `${this._engine.world.entityCount}|${this._selection.first ?? -1}|${this._selection.count}|${this._filter}|${this._collapsed.size}`;
+    if (!this._dirty && signature === this._lastSignature) return;
+    this._lastSignature = signature;
+    this._dirty = false;
+
     this._tree.innerHTML = '';
     const hierarchy = this._buildHierarchy();
     this._renderNodes(this._tree, hierarchy, 0);
@@ -143,7 +165,8 @@ export class SceneHierarchyPanel {
           e.stopPropagation();
           if (this._collapsed.has(node.id)) this._collapsed.delete(node.id);
           else this._collapsed.add(node.id);
-          this._render();
+          this._dirty = true;
+          this._renderIfNeeded();
         });
         row.appendChild(arrow);
       } else {
@@ -179,7 +202,6 @@ export class SceneHierarchyPanel {
       });
       row.addEventListener('click', (e) => {
         this._selection.select(node.id, e.ctrlKey || e.metaKey);
-        this._render();
       });
 
       container.appendChild(row);

@@ -6,7 +6,7 @@
  */
 
 import type { World, Query } from '@engine/ecs';
-import { WorldMatrix, MeshRef, MaterialRef, Visible } from '@engine/ecs';
+import { WorldMatrix, MeshRef, MaterialRef, Visible, SkeletonRef } from '@engine/ecs';
 import type { FrameContext } from '@engine/scheduler';
 import type { PBRRenderer } from './pbr-pipeline.js';
 import type { GPUMesh } from './mesh.js';
@@ -23,6 +23,8 @@ export interface RenderSystemContext {
   registries: RenderRegistries;
   getCamera: () => { vp: Float32Array; eye: [number, number, number] };
   getLighting: () => SceneLighting;
+  getSkinMatrices?: (entityId: number) => Float32Array | undefined;
+  afterMainPass?: (pass: GPURenderPassEncoder) => void;
 }
 
 const _mat = new Float32Array(16);
@@ -50,6 +52,8 @@ export function createRenderSystem(
     query.each((arch, count) => {
       const meshHandles = arch.getColumn(MeshRef, 'handle');
       const matHandles = arch.getColumn(MaterialRef, 'handle');
+      const hasSkelRef = arch.hasComponent(SkeletonRef);
+      const entityIds = arch.entities.data as Uint32Array;
 
       const wmCols = WM_FIELDS.map(f => arch.getColumn(WorldMatrix, f));
 
@@ -59,11 +63,20 @@ export function createRenderSystem(
         if (!mesh || !mat) continue;
 
         for (let c = 0; c < 16; c++) _mat[c] = wmCols[c]![i]!;
+
+        if (hasSkelRef && mesh.skinned && ctx.getSkinMatrices) {
+          const jointMatrices = ctx.getSkinMatrices(entityIds[i]!);
+          if (jointMatrices) {
+            ctx.renderer.drawSkinnedMesh(mesh, mat, _mat, jointMatrices);
+            continue;
+          }
+        }
+
         ctx.renderer.drawMesh(mesh, mat, _mat);
       }
     });
 
-    ctx.renderer.endFrame();
+    ctx.renderer.endFrame(ctx.afterMainPass);
   }
 
   return { query, render };

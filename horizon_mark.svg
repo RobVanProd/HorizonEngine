@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="512" height="512" viewBox="0 0 512 512">
+<defs>
+<linearGradient x1="96" y1="192" x2="416" y2="192" gradientUnits="userSpaceOnUse" id="d0">
+<stop offset="0" stop-color="#6ae6ff" stop-opacity="1" />
+<stop offset="1" stop-color="#ffd077" stop-opacity="1" />
+</linearGradient>
+<linearGradient x1="86" y1="62" x2="426" y2="372" gradientUnits="userSpaceOnUse" id="d1">
+<stop offset="0" stop-color="#8cf1ff" stop-opacity="1" />
+<stop offset="0.55" stop-color="#73c3ff" stop-opacity="1" />
+<stop offset="1" stop-color="#ffb54d" stop-opacity="1" />
+</linearGradient>
+</defs>
+<g opacity="1.0">
+<circle cx="256" cy="224" r="150.0" fill="#52c9ff" fill-opacity="0.2" />
+<circle cx="256" cy="224" r="96.0" fill="#ffb347" fill-opacity="0.12" />
+<rect x="110.0" y="208" width="292.0" height="8" rx="4" ry="4" fill="url(#d0)" fill-opacity="0.95" />
+<path d="M78.0,94.0 L172.0,28.0 L340.0,28.0 L434.0,94.0 L406.0,332.0 L106.0,332.0 Z" fill="#07111d" fill-opacity="0.44" stroke="url(#d1)" stroke-width="6" stroke-opacity="0.92" />
+<path d="M 124.0 210 Q 256 124.0 388.0 210" stroke="url(#d0)" stroke-width="10" stroke-opacity="0.95" fill="none" />
+<path d="M 148.0 200 Q 256 129.0 364.0 200" stroke="url(#d0)" stroke-width="8" stroke-opacity="0.95" fill="none" />
+<path d="M 172.0 190 Q 256 134.0 340.0 190" stroke="url(#d0)" stroke-width="6" stroke-opacity="0.95" fill="none" />
+<path d="M144.0,120.0 L198.0,120.0 L184.0,246.0 L130.0,246.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M314.0,120.0 L368.0,120.0 L382.0,246.0 L328.0,246.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M182.0,194.0 L330.0,194.0 L318.0,238.0 L194.0,238.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M182.0,246.0 L236.0,246.0 L204.0,352.0 L160.0,352.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+<path d="M276.0,246.0 L330.0,246.0 L352.0,352.0 L308.0,352.0 Z" fill="url(#d1)" stroke="#f6fbff" stroke-width="1.5" stroke-opacity="0.3" fill-opacity="0.97" />
+</g>
+</svg>

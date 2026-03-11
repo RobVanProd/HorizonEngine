@@ -8,12 +8,22 @@ import { GridRenderer } from './grid-renderer.js';
 import { GizmoRenderer, type GizmoMode } from '../gizmos/gizmo-renderer.js';
 import { PickPass } from '../picking/pick-pass.js';
 import { Selection } from '../picking/selection.js';
-import { COLORS, el } from '../ui/theme.js';
+import { COLORS, FONT, el } from '../ui/theme.js';
 
 export interface ViewportOptions {
   engine: Engine;
   container: HTMLElement;
   selection: Selection;
+}
+
+export interface ViewportHudState {
+  fps?: number;
+  selectedLabel?: string;
+  selectedTransform?: string;
+  entities?: number;
+  backend?: string;
+  renderMode?: string;
+  warnings?: string;
 }
 
 export class Viewport {
@@ -26,8 +36,14 @@ export class Viewport {
   private _engine: Engine;
   private _container: HTMLElement;
   private _overlay: HTMLDivElement;
-  private _viewLabel: HTMLDivElement;
+  private _topLeft: HTMLDivElement;
+  private _topRight: HTMLDivElement;
+  private _bottomLeft: HTMLDivElement;
+  private _bottomRight: HTMLDivElement;
+  private _viewLabel: HTMLButtonElement;
+  private _hudState: ViewportHudState = {};
   private _gizmoMode: GizmoMode = 'translate';
+  private _showGizmo = true;
   private _showGrid = true;
 
   constructor(opts: ViewportOptions) {
@@ -45,20 +61,37 @@ export class Viewport {
 
     // Overlay for viewport info
     this._overlay = el('div', {
-      position: 'absolute', top: '4px', left: '4px', right: '4px',
-      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+      position: 'absolute', inset: '0',
       pointerEvents: 'none', zIndex: '10',
     });
     this._container.style.position = 'relative';
+    this._container.style.outline = '1px solid rgba(124,140,255,0.22)';
+    this._container.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.02), inset 0 10px 40px rgba(0,0,0,0.12)';
     this._container.appendChild(this._overlay);
 
-    this._viewLabel = el('div', {
-      background: 'rgba(0,0,0,0.5)', color: COLORS.textDim,
-      padding: '2px 8px', borderRadius: '3px', fontSize: '10px',
-      pointerEvents: 'auto', cursor: 'pointer',
+    this._topLeft = this._corner('top', 'left');
+    this._topRight = this._corner('top', 'right');
+    this._bottomLeft = this._corner('bottom', 'left');
+    this._bottomRight = this._corner('bottom', 'right');
+    this._overlay.appendChild(this._topLeft);
+    this._overlay.appendChild(this._topRight);
+    this._overlay.appendChild(this._bottomLeft);
+    this._overlay.appendChild(this._bottomRight);
+
+    this._viewLabel = document.createElement('button');
+    this._viewLabel.className = 'he-chip';
+    Object.assign(this._viewLabel.style, {
+      pointerEvents: 'auto',
+      cursor: 'pointer',
+      borderRadius: '999px',
+      padding: '4px 10px',
+      lineHeight: '1',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
     });
     this._viewLabel.textContent = 'Perspective';
-    this._overlay.appendChild(this._viewLabel);
+    this._topLeft.appendChild(this._viewLabel);
 
     // View presets dropdown
     const presets: ViewPreset[] = ['perspective', 'top', 'front', 'right'];
@@ -67,7 +100,11 @@ export class Viewport {
       const next = presets[(idx + 1) % presets.length]!;
       this.camera.setPreset(next);
       this._viewLabel.textContent = next.charAt(0).toUpperCase() + next.slice(1);
+      this._renderHud();
     });
+
+    this._topLeft.appendChild(this._chip('Lit'));
+    this._topLeft.appendChild(this._chip('WebGPU'));
 
     // Attach camera to the viewport's canvas container
     this.camera.attach(this._container);
@@ -80,13 +117,24 @@ export class Viewport {
       const y = e.clientY - rect.top;
       await this._doPick(x, y, e.ctrlKey || e.metaKey);
     });
+
+    this.selection.onChange(() => this._renderHud());
+    this._renderHud();
   }
 
   get gizmoMode(): GizmoMode { return this._gizmoMode; }
-  set gizmoMode(m: GizmoMode) { this._gizmoMode = m; }
+  set gizmoMode(m: GizmoMode) { this._gizmoMode = m; this._renderHud(); }
+
+  get showGizmo(): boolean { return this._showGizmo; }
+  set showGizmo(v: boolean) { this._showGizmo = v; this._renderHud(); }
 
   get showGrid(): boolean { return this._showGrid; }
-  set showGrid(v: boolean) { this._showGrid = v; }
+  set showGrid(v: boolean) { this._showGrid = v; this._renderHud(); }
+
+  syncHud(state: ViewportHudState): void {
+    this._hudState = { ...this._hudState, ...state };
+    this._renderHud();
+  }
 
   /**
    * Called each frame from the editor render loop.
@@ -104,7 +152,7 @@ export class Viewport {
 
     // Render gizmo for selected entity
     const selectedId = this.selection.first;
-    if (selectedId !== null) {
+    if (this._showGizmo && selectedId !== null) {
       const world = this._engine.world;
       if (world.has(selectedId) && world.hasComponent(selectedId, LocalTransform)) {
         const px = world.getField(selectedId, LocalTransform, 'px');
@@ -186,5 +234,61 @@ export class Viewport {
     this.gizmoRenderer.destroy();
     this.pickPass.destroy();
     this._overlay.remove();
+  }
+
+  private _corner(vertical: 'top' | 'bottom', horizontal: 'left' | 'right'): HTMLDivElement {
+    return el('div', {
+      position: 'absolute',
+      [vertical]: '8px',
+      [horizontal]: '8px',
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px',
+      maxWidth: '42%',
+      justifyContent: horizontal === 'right' ? 'flex-end' : 'flex-start',
+      alignItems: 'center',
+    } as Partial<CSSStyleDeclaration>);
+  }
+
+  private _chip(text: string, accent = false): HTMLDivElement {
+    const chip = el('div');
+    chip.className = 'he-chip';
+    if (accent) {
+      chip.style.borderColor = 'rgba(99,212,255,0.28)';
+      chip.style.color = COLORS.text;
+    }
+    chip.textContent = text;
+    return chip;
+  }
+
+  private _renderHud(): void {
+    this._topRight.innerHTML = '';
+    this._bottomLeft.innerHTML = '';
+    this._bottomRight.innerHTML = '';
+
+    const fps = this._hudState.fps ?? 0;
+    const fpsChip = this._chip(`${Math.round(fps)} FPS`, true);
+    fpsChip.style.color = fps >= 55 ? COLORS.success : fps >= 30 ? COLORS.warning : COLORS.error;
+    this._topRight.appendChild(fpsChip);
+    this._topRight.appendChild(this._chip(this._hudState.renderMode ?? 'Lit'));
+    this._topRight.appendChild(this._chip(this._hudState.backend ?? 'WebGPU'));
+    if (this._hudState.entities !== undefined) {
+      this._topRight.appendChild(this._chip(`${this._hudState.entities} entities`));
+    }
+
+    this._bottomLeft.appendChild(this._chip(this._hudState.selectedLabel ?? 'No selection'));
+    if (this._hudState.selectedTransform) {
+      const mono = this._chip(this._hudState.selectedTransform);
+      mono.style.fontFamily = FONT.mono;
+      this._bottomLeft.appendChild(mono);
+    }
+
+    this._bottomRight.appendChild(this._chip(this._showGrid ? 'Grid On' : 'Grid Off'));
+    this._bottomRight.appendChild(this._chip(`Tool ${this._showGizmo ? this._gizmoMode : 'select'}`));
+    if (this._hudState.warnings) {
+      const warn = this._chip(this._hudState.warnings);
+      warn.style.color = COLORS.warning;
+      this._bottomRight.appendChild(warn);
+    }
   }
 }

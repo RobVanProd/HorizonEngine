@@ -11,6 +11,7 @@ export interface ToolbarEvents {
   onGridToggle?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onCommandPalette?: () => void;
 }
 
 export class Toolbar {
@@ -30,8 +31,9 @@ export class Toolbar {
     this.root = el('div', {
       display: 'flex', alignItems: 'center',
       height: `${SIZES.toolbarHeight}px`,
-      background: COLORS.bg, borderBottom: `1px solid ${COLORS.border}`,
-      padding: '0 8px', gap: '4px', userSelect: 'none',
+      background: `linear-gradient(180deg, ${COLORS.bgLight}, ${COLORS.bg})`, borderBottom: `1px solid ${COLORS.border}`,
+      padding: '0 10px', gap: '6px', userSelect: 'none',
+      boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.02)',
     });
 
     // Tool group
@@ -96,6 +98,10 @@ export class Toolbar {
     // Spacer
     this.root.appendChild(el('div', { flex: '1' }));
 
+    const commandBtn = this._createBtn(Icons.search(), 'Command Palette (Ctrl+K)');
+    commandBtn.addEventListener('click', () => events.onCommandPalette?.());
+    this.root.appendChild(commandBtn);
+
     this._updateToolHighlight();
     this._updatePlayHighlight();
   }
@@ -129,7 +135,7 @@ export class Toolbar {
     Object.assign(btn.style, {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       width: '28px', height: '28px', padding: '0',
-      borderRadius: '4px',
+      borderRadius: '6px',
     });
     btn.appendChild(icon);
     return btn;

@@ -1,5 +1,7 @@
 import { COLORS, FONT, SIZES, el } from './theme.js';
 
+const BRAND_MARK_URL = new URL('../../../../horizon_mark.svg', import.meta.url).href;
+
 export interface MenuItem {
   label: string;
   shortcut?: string;
@@ -29,10 +31,28 @@ export class MenuBar {
     });
 
     const logo = el('div', {
-      padding: '0 10px', fontWeight: '700', fontSize: FONT.size.lg,
-      color: COLORS.accent, letterSpacing: '0.5px',
+      padding: '0 10px',
+      display: 'flex', alignItems: 'center', gap: '8px',
+      color: COLORS.accent,
     });
-    logo.textContent = 'Horizon';
+    const logoImg = document.createElement('img');
+    logoImg.src = BRAND_MARK_URL;
+    logoImg.alt = 'Horizon';
+    Object.assign(logoImg.style, {
+      width: '18px',
+      height: '18px',
+      display: 'block',
+      filter: 'drop-shadow(0 0 6px rgba(106,230,255,0.18))',
+    });
+    const logoText = el('span', {
+      fontWeight: '700',
+      fontSize: FONT.size.lg,
+      letterSpacing: '0.5px',
+      color: '#f4f8ff',
+    });
+    logoText.textContent = 'Horizon';
+    logo.appendChild(logoImg);
+    logo.appendChild(logoText);
     this.root.appendChild(logo);
 
     for (const group of groups) {

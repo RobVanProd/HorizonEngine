@@ -35,6 +35,8 @@ export class LayoutManager {
   private _leftSidebar: HTMLDivElement;
   private _rightSidebar: HTMLDivElement;
   private _bottomPanel: HTMLDivElement;
+  private _leftResizer!: HTMLDivElement;
+  private _rightResizer!: HTMLDivElement;
   private _panels = new Map<string, PanelState>();
   private _leftWidth: number;
   private _rightWidth: number;
@@ -142,6 +144,21 @@ export class LayoutManager {
     return this._panels.get(id)?.body ?? null;
   }
 
+  mountSidebar(side: 'left' | 'right', content: HTMLElement): void {
+    const sidebar = side === 'left' ? this._leftSidebar : this._rightSidebar;
+    sidebar.querySelectorAll('[data-sidebar-content="true"]').forEach((el) => el.remove());
+    const wrapper = el('div', {
+      display: 'flex',
+      flexDirection: 'column',
+      flex: '1',
+      minHeight: '0',
+      overflow: 'hidden',
+      background: side === 'left' ? 'linear-gradient(180deg, rgba(29,35,54,0.92), rgba(18,21,34,0.98))' : 'linear-gradient(180deg, rgba(24,28,46,0.96), rgba(17,19,30,0.98))',
+    }, { 'data-sidebar-content': 'true' });
+    wrapper.appendChild(content);
+    sidebar.insertBefore(wrapper, side === 'left' ? this._leftResizer : this._rightResizer);
+  }
+
   showPanel(id: string): void {
     const p = this._panels.get(id);
     if (p) { p.visible = true; p.container.style.display = 'flex'; }
@@ -225,9 +242,11 @@ export class LayoutManager {
     };
 
     this._leftSidebar.style.position = 'relative';
-    this._leftSidebar.appendChild(makeResizer('left'));
+    this._leftResizer = makeResizer('left');
+    this._leftSidebar.appendChild(this._leftResizer);
     this._rightSidebar.style.position = 'relative';
-    this._rightSidebar.appendChild(makeResizer('right'));
+    this._rightResizer = makeResizer('right');
+    this._rightSidebar.appendChild(this._rightResizer);
   }
 
   destroy(): void {

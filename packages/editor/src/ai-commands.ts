@@ -1,22 +1,22 @@
 import type { Editor } from './editor.js';
-
-interface CommandRouter {
-  register(name: string, schema: any, handler: (args: any) => any): void;
-}
+import type { CommandRouter } from '@engine/ai';
 
 /**
  * Register editor-specific AI commands onto a CommandRouter.
  */
 export function registerEditorCommands(router: CommandRouter, editor: Editor): void {
-  router.register('editor.selectEntity', {
+  router.register({
+    action: 'editor.selectEntity',
     description: 'Select an entity by ID in the editor',
     params: { entityId: { type: 'number', required: true, description: 'Entity ID to select' } },
-  }, (args: { entityId: number }) => {
-    editor.selection.select(args.entityId);
-    return { ok: true, selected: args.entityId };
+  }, (params) => {
+    const entityId = Number(params['entityId']);
+    editor.selection.select(entityId);
+    return { ok: true, data: { selected: entityId } };
   });
 
-  router.register('editor.clearSelection', {
+  router.register({
+    action: 'editor.clearSelection',
     description: 'Clear the current selection',
     params: {},
   }, () => {
@@ -24,24 +24,28 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
     return { ok: true };
   });
 
-  router.register('editor.getSelection', {
+  router.register({
+    action: 'editor.getSelection',
     description: 'Get the list of currently selected entity IDs',
     params: {},
   }, () => {
-    return { ids: [...editor.selection.ids] };
+    return { ok: true, data: { ids: [...editor.selection.ids] } };
   });
 
-  router.register('editor.setTool', {
+  router.register({
+    action: 'editor.setTool',
     description: 'Set the active transform tool',
     params: { tool: { type: 'string', required: true, description: 'Tool: select, translate, rotate, scale' } },
-  }, (args: { tool: string }) => {
+  }, (params) => {
+    const tool = String(params['tool'] ?? '');
     const valid = ['select', 'translate', 'rotate', 'scale'];
-    if (!valid.includes(args.tool)) return { error: `Invalid tool. Use: ${valid.join(', ')}` };
-    editor.toolbar.setTool(args.tool as any);
-    return { ok: true, tool: args.tool };
+    if (!valid.includes(tool)) return { ok: false, error: `Invalid tool. Use: ${valid.join(', ')}` };
+    editor.toolbar.setTool(tool as any);
+    return { ok: true, data: { tool } };
   });
 
-  router.register('editor.setCamera', {
+  router.register({
+    action: 'editor.setCamera',
     description: 'Set the editor camera target, distance, and angles',
     params: {
       targetX: { type: 'number', description: 'Camera target X' },
@@ -51,85 +55,95 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
       yaw: { type: 'number', description: 'Camera yaw in radians' },
       pitch: { type: 'number', description: 'Camera pitch in radians' },
     },
-  }, (args: Record<string, number>) => {
+  }, (params) => {
     const cam = editor.viewport.camera;
-    if (args.targetX !== undefined) cam.target[0] = args.targetX;
-    if (args.targetY !== undefined) cam.target[1] = args.targetY;
-    if (args.targetZ !== undefined) cam.target[2] = args.targetZ;
-    if (args.distance !== undefined) cam.distance = args.distance;
-    if (args.yaw !== undefined) cam.yaw = args.yaw;
-    if (args.pitch !== undefined) cam.pitch = args.pitch;
+    if (params['targetX'] !== undefined) cam.target[0] = Number(params['targetX']);
+    if (params['targetY'] !== undefined) cam.target[1] = Number(params['targetY']);
+    if (params['targetZ'] !== undefined) cam.target[2] = Number(params['targetZ']);
+    if (params['distance'] !== undefined) cam.distance = Number(params['distance']);
+    if (params['yaw'] !== undefined) cam.yaw = Number(params['yaw']);
+    if (params['pitch'] !== undefined) cam.pitch = Number(params['pitch']);
     return { ok: true };
   });
 
-  router.register('editor.setViewPreset', {
+  router.register({
+    action: 'editor.setViewPreset',
     description: 'Set the viewport to a camera preset',
     params: { preset: { type: 'string', required: true, description: 'Preset: perspective, top, front, right' } },
-  }, (args: { preset: string }) => {
+  }, (params) => {
+    const preset = String(params['preset'] ?? '');
     const valid = ['perspective', 'top', 'front', 'right'];
-    if (!valid.includes(args.preset)) return { error: `Invalid preset. Use: ${valid.join(', ')}` };
-    editor.viewport.camera.setPreset(args.preset as any);
+    if (!valid.includes(preset)) return { ok: false, error: `Invalid preset. Use: ${valid.join(', ')}` };
+    editor.viewport.camera.setPreset(preset as any);
     return { ok: true };
   });
 
-  router.register('editor.toggleGrid', {
+  router.register({
+    action: 'editor.toggleGrid',
     description: 'Toggle the viewport grid visibility',
     params: {},
   }, () => {
     editor.viewport.showGrid = !editor.viewport.showGrid;
-    return { ok: true, gridVisible: editor.viewport.showGrid };
+    return { ok: true, data: { gridVisible: editor.viewport.showGrid } };
   });
 
-  router.register('editor.undo', {
+  router.register({
+    action: 'editor.undo',
     description: 'Undo the last action',
     params: {},
   }, () => {
-    if (!editor.undoStack.canUndo) return { error: 'Nothing to undo' };
+    if (!editor.undoStack.canUndo) return { ok: false, error: 'Nothing to undo' };
     editor.undoStack.undo();
     return { ok: true };
   });
 
-  router.register('editor.redo', {
+  router.register({
+    action: 'editor.redo',
     description: 'Redo the last undone action',
     params: {},
   }, () => {
-    if (!editor.undoStack.canRedo) return { error: 'Nothing to redo' };
+    if (!editor.undoStack.canRedo) return { ok: false, error: 'Nothing to redo' };
     editor.undoStack.redo();
     return { ok: true };
   });
 
-  router.register('editor.saveScene', {
+  router.register({
+    action: 'editor.saveScene',
     description: 'Serialize the current scene to JSON',
     params: { name: { type: 'string', description: 'Scene name (default: scene)' } },
-  }, (args: { name?: string }) => {
-    const json = editor.serializer.toJSON(args.name ?? 'scene');
-    return { ok: true, json };
+  }, (params) => {
+    const json = editor.serializer.toJSON(String(params['name'] ?? 'scene'));
+    return { ok: true, data: { json } };
   });
 
-  router.register('editor.loadScene', {
+  router.register({
+    action: 'editor.loadScene',
     description: 'Load a scene from JSON',
     params: { json: { type: 'string', required: true, description: 'Scene JSON string' } },
-  }, (args: { json: string }) => {
+  }, (params) => {
     try {
-      editor.serializer.fromJSON(args.json);
+      editor.serializer.fromJSON(String(params['json'] ?? ''));
       return { ok: true };
     } catch (e: any) {
-      return { error: e.message };
+      return { ok: false, error: e.message };
     }
   });
 
-  router.register('editor.addPrimitive', {
+  router.register({
+    action: 'editor.addPrimitive',
     description: 'Add a primitive shape to the scene',
     params: { type: { type: 'string', required: true, description: 'Shape: sphere, plane, cube' } },
-  }, (args: { type: string }) => {
+  }, (params) => {
+    const type = String(params['type'] ?? '');
     const valid = ['sphere', 'plane', 'cube'];
-    if (!valid.includes(args.type)) return { error: `Invalid type. Use: ${valid.join(', ')}` };
+    if (!valid.includes(type)) return { ok: false, error: `Invalid type. Use: ${valid.join(', ')}` };
     // Trigger the editor's add primitive flow
-    (editor as any)._addPrimitive(args.type);
+    (editor as any)._addPrimitive(type);
     return { ok: true };
   });
 
-  router.register('editor.focusSelected', {
+  router.register({
+    action: 'editor.focusSelected',
     description: 'Focus the camera on the currently selected entity',
     params: {},
   }, () => {
@@ -137,7 +151,8 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
     return { ok: true };
   });
 
-  router.register('editor.refreshAssets', {
+  router.register({
+    action: 'editor.refreshAssets',
     description: 'Refresh the asset browser to reflect current engine state',
     params: {},
   }, () => {
