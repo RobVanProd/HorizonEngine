@@ -1,8 +1,6 @@
 import type { Engine } from '@engine/core';
-import { LocalTransform, MeshRef, MaterialRef, Visible, WorldMatrix } from '@engine/ecs';
-import {
-  mat4Perspective, mat4LookAt, mat4Multiply, mat4Translation,
-} from '@engine/renderer-webgpu';
+import { AudioSource, LocalTransform, MeshRef, Visible, WorldMatrix } from '@engine/ecs';
+import { DebugDraw } from '@engine/devtools';
 import { EditorCamera, type ViewPreset } from './editor-camera.js';
 import { GridRenderer } from './grid-renderer.js';
 import { GizmoRenderer, type GizmoAxis, type GizmoMode } from '../gizmos/gizmo-renderer.js';
@@ -35,12 +33,23 @@ interface TransformDragState {
   startPx: number;
   startPy: number;
   startPz: number;
+  startRotX: number;
   startRotY: number;
+  startRotZ: number;
   startScaleX: number;
   startScaleY: number;
   startScaleZ: number;
   moved: boolean;
 }
+
+export type ViewportOverlayId = 'bounds' | 'audio';
+
+const WM_FIELDS = [
+  'm0', 'm1', 'm2', 'm3',
+  'm4', 'm5', 'm6', 'm7',
+  'm8', 'm9', 'm10', 'm11',
+  'm12', 'm13', 'm14', 'm15',
+] as const;
 
 export class Viewport {
   readonly camera: EditorCamera;
@@ -48,6 +57,7 @@ export class Viewport {
   readonly gridRenderer: GridRenderer;
   readonly gizmoRenderer: GizmoRenderer;
   readonly pickPass: PickPass;
+  readonly debugDraw: DebugDraw;
 
   private _engine: Engine;
   private _container: HTMLElement;
@@ -61,6 +71,10 @@ export class Viewport {
   private _gizmoMode: GizmoMode = 'translate';
   private _showGizmo = true;
   private _showGrid = true;
+  private _overlays: Record<ViewportOverlayId, boolean> = {
+    bounds: false,
+    audio: false,
+  };
   private _dragState: TransformDragState | null = null;
   private _suppressClickPick = false;
   private _onViewportMouseDown = (e: MouseEvent) => this._onMouseDown(e);
@@ -79,6 +93,7 @@ export class Viewport {
     this.gridRenderer = new GridRenderer(device, format);
     this.gizmoRenderer = new GizmoRenderer(device, format);
     this.pickPass = new PickPass(device);
+    this.debugDraw = new DebugDraw(device, format);
 
     // Overlay for viewport info
     this._overlay = el('div', {
@@ -164,6 +179,55 @@ export class Viewport {
     this._renderHud();
   }
 
+  getOverlay(name: ViewportOverlayId): boolean {
+    return this._overlays[name];
+  }
+
+  setOverlay(name: ViewportOverlayId, enabled: boolean): void {
+    this._overlays[name] = enabled;
+    this._renderHud();
+  }
+
+  toggleOverlay(name: ViewportOverlayId): boolean {
+    this._overlays[name] = !this._overlays[name];
+    this._renderHud();
+    return this._overlays[name];
+  }
+
+  inspectState(): {
+    selection: number[];
+    gizmoMode: GizmoMode;
+    showGrid: boolean;
+    showGizmo: boolean;
+    overlays: Record<ViewportOverlayId, boolean>;
+    camera: {
+      target: [number, number, number];
+      eye: [number, number, number];
+      distance: number;
+      yaw: number;
+      pitch: number;
+      ortho: boolean;
+      orthoSize: number;
+    };
+  } {
+    return {
+      selection: [...this.selection.ids],
+      gizmoMode: this._gizmoMode,
+      showGrid: this._showGrid,
+      showGizmo: this._showGizmo,
+      overlays: { ...this._overlays },
+      camera: {
+        target: [...this.camera.target] as [number, number, number],
+        eye: this.camera.getEye(),
+        distance: this.camera.distance,
+        yaw: this.camera.yaw,
+        pitch: this.camera.pitch,
+        ortho: this.camera.ortho,
+        orthoSize: this.camera.orthoSize,
+      },
+    };
+  }
+
   /**
    * Called each frame from the editor render loop.
    * Renders grid and gizmos into the current render pass.
@@ -186,12 +250,17 @@ export class Viewport {
         const px = world.getField(selectedId, LocalTransform, 'px');
         const py = world.getField(selectedId, LocalTransform, 'py');
         const pz = world.getField(selectedId, LocalTransform, 'pz');
+        const sx = world.getField(selectedId, LocalTransform, 'scaleX');
+        const sy = world.getField(selectedId, LocalTransform, 'scaleY');
+        const sz = world.getField(selectedId, LocalTransform, 'scaleZ');
         const center: [number, number, number] = [px, py, pz];
 
         const distToCamera = Math.hypot(eye[0] - px, eye[1] - py, eye[2] - pz);
         const gizmoScale = distToCamera * 0.15;
+        const selectionScale = Math.max(Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)) * 1.2, distToCamera * 0.04);
 
         this.gizmoRenderer.begin();
+        this.gizmoRenderer.drawSelectionBounds(center, selectionScale);
         switch (this._gizmoMode) {
           case 'translate': this.gizmoRenderer.drawTranslate(center, gizmoScale); break;
           case 'rotate': this.gizmoRenderer.drawRotate(center, gizmoScale); break;
@@ -200,6 +269,15 @@ export class Viewport {
         this.gizmoRenderer.flush(pass, vp);
       }
     }
+
+    this.debugDraw.begin();
+    if (this._overlays.bounds) {
+      this._appendBoundsOverlays();
+    }
+    if (this._overlays.audio) {
+      this._appendAudioOverlays();
+    }
+    this.debugDraw.flush(pass, vp);
   }
 
   updateCamera(dt: number): void {
@@ -209,6 +287,10 @@ export class Viewport {
     const vp = this.camera.getViewProjection(aspect);
     const eye = this.camera.getEye();
     this._engine.setCamera(vp, eye);
+  }
+
+  async pickScreenPoint(x: number, y: number, additive = false): Promise<void> {
+    await this._doPick(x, y, additive);
   }
 
   private _onMouseDown(e: MouseEvent): void {
@@ -237,7 +319,9 @@ export class Viewport {
       startPx: world.getField(selectedId, LocalTransform, 'px'),
       startPy: world.getField(selectedId, LocalTransform, 'py'),
       startPz: world.getField(selectedId, LocalTransform, 'pz'),
+      startRotX: world.getField(selectedId, LocalTransform, 'rotX'),
       startRotY: world.getField(selectedId, LocalTransform, 'rotY'),
+      startRotZ: world.getField(selectedId, LocalTransform, 'rotZ'),
       startScaleX: world.getField(selectedId, LocalTransform, 'scaleX'),
       startScaleY: world.getField(selectedId, LocalTransform, 'scaleY'),
       startScaleZ: world.getField(selectedId, LocalTransform, 'scaleZ'),
@@ -278,7 +362,7 @@ export class Viewport {
         this._applyTranslateDrag(id, dx, dy);
         break;
       case 'rotate':
-        world.setField(id, LocalTransform, 'rotY', this._dragState.startRotY + dx * 0.01);
+        this._applyRotateDrag(id, dx, dy);
         break;
       case 'scale':
         this._applyScaleDrag(id, dx, dy);
@@ -295,44 +379,59 @@ export class Viewport {
   }
 
   private async _doPick(x: number, y: number, additive: boolean): Promise<void> {
-    // Simplified picking: use entity positions projected to screen space
     const canvas = this._engine.canvas.element;
-    const aspect = canvas.width / canvas.height;
+    const width = Math.max(1, canvas.width);
+    const height = Math.max(1, canvas.height);
+    const aspect = width / height;
     const vp = this.camera.getViewProjection(aspect);
     const world = this._engine.world;
-    const q = world.query(Visible, LocalTransform);
+    const query = world.query(WorldMatrix, MeshRef, Visible);
+    const createdBuffers: GPUBuffer[] = [];
 
-    let bestDist = 40; // pixels threshold
-    let bestId = -1;
+    this.pickPass.render(width, height, vp, (pass) => {
+      query.each((arch, count) => {
+        const ids = arch.entities.data as Uint32Array;
+        const meshHandles = arch.getColumn(MeshRef, 'handle') as Uint32Array;
+        const worldColumns = WM_FIELDS.map((field) => arch.getColumn(WorldMatrix, field)) as Float32Array[];
 
-    q.each((arch, count) => {
-      const ids = arch.entities.data as Uint32Array;
-      const pxCol = arch.getColumn(LocalTransform, 'px') as Float32Array;
-      const pyCol = arch.getColumn(LocalTransform, 'py') as Float32Array;
-      const pzCol = arch.getColumn(LocalTransform, 'pz') as Float32Array;
+        for (let i = 0; i < count; i++) {
+          const mesh = this._engine.meshes.get(meshHandles[i]!);
+          if (!mesh) continue;
 
-      for (let i = 0; i < count; i++) {
-        const wx = pxCol[i]!, wy = pyCol[i]!, wz = pzCol[i]!;
-        // Project to screen
-        const cx = vp[0]! * wx + vp[4]! * wy + vp[8]!  * wz + vp[12]!;
-        const cy = vp[1]! * wx + vp[5]! * wy + vp[9]!  * wz + vp[13]!;
-        const cw = vp[3]! * wx + vp[7]! * wy + vp[11]! * wz + vp[15]!;
+          const objectData = new ArrayBuffer(80);
+          const modelFloats = new Float32Array(objectData, 0, 16);
+          const idView = new Uint32Array(objectData, 64, 4);
+          for (let c = 0; c < 16; c++) {
+            modelFloats[c] = worldColumns[c]![i]!;
+          }
+          idView[0] = ids[i]!;
 
-        if (cw <= 0) continue;
-        const ndcX = cx / cw;
-        const ndcY = cy / cw;
-        const sx = (ndcX * 0.5 + 0.5) * canvas.clientWidth;
-        const sy = (-ndcY * 0.5 + 0.5) * canvas.clientHeight;
+          const objectBuffer = this._engine.gpu.device.createBuffer({
+            size: 80,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+          });
+          createdBuffers.push(objectBuffer);
+          this._engine.gpu.device.queue.writeBuffer(objectBuffer, 0, objectData);
 
-        const dist = Math.hypot(sx - x, sy - y);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestId = ids[i]!;
+          pass.setPipeline(this.pickPass.getPipeline(mesh.skinned));
+          pass.setBindGroup(1, this.pickPass.createObjectBindGroup(objectBuffer));
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.setIndexBuffer(mesh.indexBuffer, 'uint32');
+          pass.drawIndexed(mesh.indexCount);
         }
-      }
+      });
     });
 
-    if (bestId >= 0) {
+    const pickedId = await this.pickPass.readPixel(
+      x * (width / Math.max(1, canvas.clientWidth)),
+      y * (height / Math.max(1, canvas.clientHeight)),
+    );
+    for (const buffer of createdBuffers) {
+      buffer.destroy();
+    }
+
+    if (pickedId > 0) {
+      const bestId = Number(pickedId);
       this.selection.select(bestId, additive);
     } else if (!additive) {
       this.selection.clear();
@@ -345,6 +444,7 @@ export class Viewport {
     this.gridRenderer.destroy();
     this.gizmoRenderer.destroy();
     this.pickPass.destroy();
+    this.debugDraw.destroy();
     window.removeEventListener('mousemove', this._onViewportMouseMove);
     window.removeEventListener('mouseup', this._onViewportMouseUp);
     this._overlay.remove();
@@ -416,26 +516,30 @@ export class Viewport {
     const segments = 48;
     let bestDistance = 14;
     let bestAxis: GizmoAxis = null;
-    let previous = this._projectWorldPoint(px + scale, py, pz);
-    if (!previous) return null;
+    const rings: Array<{ axis: Exclude<GizmoAxis, 'xy' | 'xz' | 'yz' | null>; pointAt: (t: number) => [number, number, number] }> = [
+      { axis: 'x', pointAt: (t) => [px, py + Math.cos(t) * scale, pz + Math.sin(t) * scale] },
+      { axis: 'y', pointAt: (t) => [px + Math.cos(t) * scale, py, pz + Math.sin(t) * scale] },
+      { axis: 'z', pointAt: (t) => [px + Math.cos(t) * scale, py + Math.sin(t) * scale, pz] },
+    ];
 
-    for (let i = 1; i <= segments; i++) {
-      const t = (i / segments) * Math.PI * 2;
-      const current = this._projectWorldPoint(
-        px + Math.cos(t) * scale,
-        py,
-        pz + Math.sin(t) * scale,
-      );
-      if (!previous || !current) {
+    for (const ring of rings) {
+      let previous = this._projectWorldPoint(...ring.pointAt(0));
+      if (!previous) continue;
+
+      for (let i = 1; i <= segments; i++) {
+        const t = (i / segments) * Math.PI * 2;
+        const current = this._projectWorldPoint(...ring.pointAt(t));
+        if (!previous || !current) {
+          previous = current;
+          continue;
+        }
+        const distance = this._pointToSegmentDistance(x, y, previous.x, previous.y, current.x, current.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestAxis = ring.axis;
+        }
         previous = current;
-        continue;
       }
-      const distance = this._pointToSegmentDistance(x, y, previous.x, previous.y, current.x, current.y);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestAxis = 'y';
-      }
-      previous = current;
     }
 
     return bestAxis;
@@ -478,7 +582,9 @@ export class Viewport {
 
     const height = Math.max(1, this._container.clientHeight);
     const fovRad = this.camera.fov * Math.PI / 180;
-    const worldPerPixel = (2 * Math.tan(fovRad * 0.5) * this.camera.distance) / height;
+    const worldPerPixel = this.camera.ortho
+      ? (2 * this.camera.orthoSize) / height
+      : (2 * Math.tan(fovRad * 0.5) * this.camera.distance) / height;
     const right = this.camera.getRightVector();
     const up = this.camera.getUpVector();
     const moveX = dx * worldPerPixel;
@@ -508,6 +614,23 @@ export class Viewport {
     world.setField(entityId, LocalTransform, 'scaleX', this._dragState.startScaleX * factor);
     world.setField(entityId, LocalTransform, 'scaleY', this._dragState.startScaleY * factor);
     world.setField(entityId, LocalTransform, 'scaleZ', this._dragState.startScaleZ * factor);
+  }
+
+  private _applyRotateDrag(entityId: number, dx: number, dy: number): void {
+    if (!this._dragState) return;
+    const world = this._engine.world;
+    switch (this._dragState.axis) {
+      case 'x':
+        world.setField(entityId, LocalTransform, 'rotX', this._dragState.startRotX - dy * 0.01);
+        break;
+      case 'z':
+        world.setField(entityId, LocalTransform, 'rotZ', this._dragState.startRotZ + dx * 0.01);
+        break;
+      case 'y':
+      default:
+        world.setField(entityId, LocalTransform, 'rotY', this._dragState.startRotY + dx * 0.01);
+        break;
+    }
   }
 
   private _corner(vertical: 'top' | 'bottom', horizontal: 'left' | 'right'): HTMLDivElement {
@@ -559,10 +682,105 @@ export class Viewport {
 
     this._bottomRight.appendChild(this._chip(this._showGrid ? 'Grid On' : 'Grid Off'));
     this._bottomRight.appendChild(this._chip(`Tool ${this._showGizmo ? this._gizmoMode : 'select'}`));
+    if (this._overlays.bounds) this._bottomRight.appendChild(this._chip('Bounds'));
+    if (this._overlays.audio) this._bottomRight.appendChild(this._chip('Audio'));
+    if (this.camera.ortho) this._bottomRight.appendChild(this._chip(`Ortho ${this.camera.orthoSize.toFixed(1)}`));
     if (this._hudState.warnings) {
       const warn = this._chip(this._hudState.warnings);
       warn.style.color = COLORS.warning;
       this._bottomRight.appendChild(warn);
     }
   }
+
+  private _appendBoundsOverlays(): void {
+    const world = this._engine.world;
+    const query = world.query(WorldMatrix, MeshRef, Visible);
+    query.each((arch, count) => {
+      const ids = arch.entities.data as Uint32Array;
+      const meshHandles = arch.getColumn(MeshRef, 'handle') as Uint32Array;
+      const worldColumns = WM_FIELDS.map((field) => arch.getColumn(WorldMatrix, field)) as Float32Array[];
+      for (let i = 0; i < count; i++) {
+        const mesh = this._engine.meshes.get(meshHandles[i]!);
+        if (!mesh) continue;
+        const matrix = new Float32Array(16);
+        for (let c = 0; c < 16; c++) matrix[c] = worldColumns[c]![i]!;
+        const bounds = transformBounds(mesh.boundsMin, mesh.boundsMax, matrix);
+        this.debugDraw.aabb(
+          bounds.min,
+          bounds.max,
+          this.selection.has(ids[i]!) ? [0.55, 0.84, 1, 0.88] : [0.45, 1, 0.55, 0.35],
+        );
+      }
+    });
+  }
+
+  private _appendAudioOverlays(): void {
+    const world = this._engine.world;
+    const query = world.query(LocalTransform, AudioSource);
+    query.each((arch, count) => {
+      const px = arch.getColumn(LocalTransform, 'px') as Float32Array;
+      const py = arch.getColumn(LocalTransform, 'py') as Float32Array;
+      const pz = arch.getColumn(LocalTransform, 'pz') as Float32Array;
+      const minDistance = arch.getColumn(AudioSource, 'refDistance') as Float32Array;
+      const maxDistance = arch.getColumn(AudioSource, 'maxDistance') as Float32Array;
+      for (let i = 0; i < count; i++) {
+        const center: [number, number, number] = [px[i]!, py[i]!, pz[i]!];
+        const inner = Math.max(0.1, minDistance[i]!);
+        const outer = Math.max(inner, maxDistance[i]!);
+        this.debugDraw.aabb(
+          [center[0] - inner, center[1] - inner, center[2] - inner],
+          [center[0] + inner, center[1] + inner, center[2] + inner],
+          [1, 0.82, 0.28, 0.78],
+        );
+        this.debugDraw.aabb(
+          [center[0] - outer, center[1] - outer, center[2] - outer],
+          [center[0] + outer, center[1] + outer, center[2] + outer],
+          [1, 0.55, 0.18, 0.28],
+        );
+      }
+    });
+  }
+}
+
+function transformBounds(
+  min: [number, number, number],
+  max: [number, number, number],
+  matrix: Float32Array,
+): { min: [number, number, number]; max: [number, number, number] } {
+  const corners: Array<[number, number, number]> = [
+    [min[0], min[1], min[2]],
+    [max[0], min[1], min[2]],
+    [min[0], max[1], min[2]],
+    [max[0], max[1], min[2]],
+    [min[0], min[1], max[2]],
+    [max[0], min[1], max[2]],
+    [min[0], max[1], max[2]],
+    [max[0], max[1], max[2]],
+  ];
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+
+  for (const corner of corners) {
+    const x = corner[0];
+    const y = corner[1];
+    const z = corner[2];
+    const wx = matrix[0]! * x + matrix[4]! * y + matrix[8]! * z + matrix[12]!;
+    const wy = matrix[1]! * x + matrix[5]! * y + matrix[9]! * z + matrix[13]!;
+    const wz = matrix[2]! * x + matrix[6]! * y + matrix[10]! * z + matrix[14]!;
+    minX = Math.min(minX, wx);
+    minY = Math.min(minY, wy);
+    minZ = Math.min(minZ, wz);
+    maxX = Math.max(maxX, wx);
+    maxY = Math.max(maxY, wy);
+    maxZ = Math.max(maxZ, wz);
+  }
+
+  return {
+    min: [minX, minY, minZ],
+    max: [maxX, maxY, maxZ],
+  };
 }

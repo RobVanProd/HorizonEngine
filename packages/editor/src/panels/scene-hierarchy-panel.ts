@@ -59,7 +59,7 @@ export class SceneHierarchyPanel {
     addBtn.addEventListener('click', () => {
       const id = this._engine.world.spawn().id;
       this._engine.world.addComponent(id, LocalTransform, {
-        px: 0, py: 0, pz: 0, rotY: 0,
+        px: 0, py: 0, pz: 0, rotX: 0, rotY: 0, rotZ: 0,
         scaleX: 1, scaleY: 1, scaleZ: 1,
       });
       this._engine.world.addComponent(id, WorldMatrix, {
@@ -116,7 +116,18 @@ export class SceneHierarchyPanel {
       if (world.hasComponent(id, SkeletonRef)) comps.push('Skel');
       if (world.hasComponent(id, AudioSource)) comps.push('Audio');
       if (world.hasComponent(id, MaterialRef)) comps.push('Mat');
-      nodes.set(id, { id, children: [], label: `Entity #${id}`, hasComponents: comps });
+      const readableLabel = this._engine.getEntityLabel(id) ?? `Entity #${id}`;
+      const labelParts = [readableLabel];
+      if (world.hasComponent(id, LocalTransform)) {
+        const px = world.getField(id, LocalTransform, 'px');
+        const py = world.getField(id, LocalTransform, 'py');
+        const pz = world.getField(id, LocalTransform, 'pz');
+        labelParts.push(`[#${id}]`);
+        labelParts.push(`(${px.toFixed(1)}, ${py.toFixed(1)}, ${pz.toFixed(1)})`);
+      } else {
+        labelParts.push(`[#${id}]`);
+      }
+      nodes.set(id, { id, children: [], label: labelParts.join(' '), hasComponents: comps });
     }
 
     const roots: HNode[] = [];
@@ -128,7 +139,7 @@ export class SceneHierarchyPanel {
         roots.push(node);
       }
     }
-    roots.sort((a, b) => a.id - b.id);
+    sortHierarchyNodes(roots);
     return roots;
   }
 
@@ -214,5 +225,12 @@ export class SceneHierarchyPanel {
 
   destroy(): void {
     this.root.remove();
+  }
+}
+
+function sortHierarchyNodes(nodes: HNode[]): void {
+  nodes.sort((a, b) => a.label.localeCompare(b.label) || a.id - b.id);
+  for (const node of nodes) {
+    if (node.children.length > 0) sortHierarchyNodes(node.children);
   }
 }

@@ -18,7 +18,10 @@ struct LightUniforms {
   lightViewProj: mat4x4f,
   envIntensity: f32,
   maxReflectionLod: f32,
-  _pad2: vec2f,
+  shadowBias: f32,
+  debugView: f32,
+  pointPositionRange: array<vec4f, 4>,
+  pointColorIntensity: array<vec4f, 4>,
 };
 
 struct MaterialUniforms {
@@ -150,7 +153,7 @@ fn computeShadow(worldPos: vec3f) -> f32 {
     for (var y = -1i; y <= 1i; y++) {
       let offset = vec2f(f32(x), f32(y)) * texelSize;
       let uv = shadowUV + offset;
-      shadow += textureSampleCompareLevel(shadowMap, shadowSampler, uv, currentDepth - 0.003);
+      shadow += textureSampleCompareLevel(shadowMap, shadowSampler, uv, currentDepth - light.shadowBias);
     }
   }
   let inBounds = step(0.0, shadowUV.x) * step(shadowUV.x, 1.0) *
@@ -217,6 +220,41 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   let radiance = light.dirColor * light.dirIntensity;
   let shadow = computeShadow(in.worldPos);
   var Lo = (diffuse + spec) * radiance * NdotL * shadow;
+  var lightComplexity = select(0.0, 1.0, NdotL > 0.0);
+
+  for (var i = 0u; i < 4u; i++) {
+    let pointPos = light.pointPositionRange[i].xyz;
+    let pointRange = light.pointPositionRange[i].w;
+    if (pointRange <= 0.0) {
+      continue;
+    }
+
+    let toLight = pointPos - in.worldPos;
+    let dist = length(toLight);
+    if (dist >= pointRange || dist <= 0.0001) {
+      continue;
+    }
+
+    let pointL = toLight / dist;
+    let pointH = normalize(V + pointL);
+    let pointNdotL = max(dot(N, pointL), 0.0);
+    if (pointNdotL <= 0.0) {
+      continue;
+    }
+
+    let pointNdotH = max(dot(N, pointH), 0.0);
+    let pointHdotV = max(dot(pointH, V), 0.0);
+    let pointD = distributionGGX(pointNdotH, roughness);
+    let pointG = geometrySmith(NdotV, pointNdotL, roughness);
+    let pointF = fresnelSchlick(pointHdotV, F0);
+    let pointSpec = (pointD * pointG * pointF) / max(4.0 * NdotV * pointNdotL, 0.001);
+    let pointKD = (1.0 - pointF) * (1.0 - metallic);
+    let pointDiffuse = pointKD * albedo / PI;
+    let attenuation = pow(clamp(1.0 - dist / pointRange, 0.0, 1.0), 2.0);
+    let pointRadiance = light.pointColorIntensity[i].xyz * light.pointColorIntensity[i].w * attenuation;
+    Lo += (pointDiffuse + pointSpec) * pointRadiance * pointNdotL;
+    lightComplexity += 1.0;
+  }
 
   var iblColor = vec3f(0.0);
   if (light.envIntensity > 0.0) {
@@ -231,6 +269,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     iblColor = (diffuseIBL + specularIBL) * light.envIntensity * ao;
   } else {
     iblColor = light.ambient * albedo * ao;
+  }
+
+  if (light.debugView > 0.5 && light.debugView < 1.5) {
+    return vec4f(N * 0.5 + 0.5, 1.0);
+  }
+  if (light.debugView > 1.5 && light.debugView < 2.5) {
+    return vec4f(vec3f(shadow), 1.0);
+  }
+  if (light.debugView > 2.5) {
+    let complexity = clamp(lightComplexity / 5.0, 0.0, 1.0);
+    let complexityColor = mix(vec3f(0.1, 0.7, 0.2), vec3f(1.0, 0.2, 0.15), complexity);
+    return vec4f(complexityColor, 1.0);
   }
 
   var color = Lo + iblColor + emissive;

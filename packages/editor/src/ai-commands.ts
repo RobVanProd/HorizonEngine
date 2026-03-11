@@ -1,5 +1,6 @@
 import type { Editor } from './editor.js';
 import type { CommandRouter } from '@engine/ai';
+import type { ViewportOverlayId } from './viewport/viewport.js';
 
 /**
  * Register editor-specific AI commands onto a CommandRouter.
@@ -158,5 +159,49 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
   }, () => {
     editor.assetBrowser.refresh();
     return { ok: true };
+  });
+
+  router.register({
+    action: 'editor.getViewportState',
+    description: 'Inspect the current viewport camera, overlays, and selection state',
+    params: {},
+  }, () => {
+    return { ok: true, data: editor.viewport.inspectState() };
+  });
+
+  router.register({
+    action: 'editor.toggleOverlay',
+    description: 'Toggle a viewport debug overlay',
+    params: {
+      overlay: { type: 'string', required: true, description: 'Overlay: bounds or audio' },
+      enabled: { type: 'boolean', description: 'Optional explicit on/off state' },
+    },
+  }, (params) => {
+    const overlay = String(params['overlay'] ?? '') as ViewportOverlayId;
+    if (overlay !== 'bounds' && overlay !== 'audio') {
+      return { ok: false, error: 'Invalid overlay. Use: bounds, audio' };
+    }
+    const enabled = params['enabled'];
+    const state = enabled === undefined
+      ? editor.viewport.toggleOverlay(overlay)
+      : (editor.viewport.setOverlay(overlay, Boolean(enabled)), editor.viewport.getOverlay(overlay));
+    return { ok: true, data: { overlay, enabled: state } };
+  });
+
+  router.register({
+    action: 'editor.pickViewport',
+    description: 'Pick an entity in the viewport at screen coordinates',
+    params: {
+      x: { type: 'number', required: true, description: 'Viewport-local X coordinate in CSS pixels' },
+      y: { type: 'number', required: true, description: 'Viewport-local Y coordinate in CSS pixels' },
+      additive: { type: 'boolean', description: 'Whether to add to the current selection' },
+    },
+  }, async (params) => {
+    await editor.viewport.pickScreenPoint(
+      Number(params['x']),
+      Number(params['y']),
+      Boolean(params['additive'] ?? false),
+    );
+    return { ok: true, data: { selection: [...editor.selection.ids] } };
   });
 }

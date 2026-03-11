@@ -4,6 +4,10 @@ import { registerSceneCommands } from './scene-api.js';
 import { registerAudioCommands } from './audio-commands.js';
 import { registerMLCommands } from './ml-commands.js';
 import { registerAdvancedCommands } from './advanced-commands.js';
+import { registerDebugCommands } from './debug-commands.js';
+import { registerWorldCommands } from './world-commands.js';
+import { registerVfxCommands } from './vfx-commands.js';
+import { registerGeometryCommands } from './geometry-commands.js';
 import { InferenceEngine } from './inference.js';
 import type { Command, CommandResult, CommandSchema, ToolDefinition, Transport } from './types.js';
 
@@ -115,6 +119,10 @@ export class EngineAI {
     registerAudioCommands(this.router, this.engine);
     registerMLCommands(this.router, this.inference);
     registerAdvancedCommands(this.router, this.engine);
+    registerDebugCommands(this.router, this.engine);
+    registerWorldCommands(this.router, this.engine);
+    registerVfxCommands(this.router, this.engine);
+    registerGeometryCommands(this.router, this.engine);
 
     this.router.register(
       {

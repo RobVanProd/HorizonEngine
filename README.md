@@ -26,7 +26,11 @@ The engine is organized into isolated subsystem packages:
 | `@engine/renderer-webgpu` | WebGPU device management, render pipelines, WGSL shaders |
 | `@engine/core` | Engine bootstrap and subsystem orchestration |
 | `@engine/audio` | Spatial audio system (WebAudio, 3D positional, ECS integration) |
-| `@engine/ai` | AI integration (LLM command API, ML inference, transports) |
+| `@engine/assets` | Asset loading (glTF/GLB, FBX, HDR, textures) |
+| `@engine/animation` | Skeletal animation, skinning, clip playback |
+| `@engine/world` | Procedural world generation (terrain, splines, biomes, scatter) |
+| `@engine/effects` | Particle effects (Niagara-like emitters, spline/terrain-aware) |
+| `@engine/ai` | AI integration (LLM command API, ML inference, scene/world commands) |
 | `@engine/devtools` | Developer tools (perf dashboard, debug draw, entity inspector) |
 | `@engine/editor` | Scene editor (viewport, hierarchy, properties, assets, gizmos) |
 
@@ -52,18 +56,22 @@ pnpm dev           # Benchmark scene
 pnpm dev:large     # Large-scene example
 pnpm dev:pbr       # PBR materials demo
 pnpm dev:anim      # Animation + audio + AI demo
-pnpm dev:editor    # Scene editor / Phase 6 vertical slice
+pnpm dev:editor    # Scene editor with procedural terrain, FBX support, and AI commands
 ```
+
+The editor demo loads a boot intro video, then opens the scene editor. With an asset pack in `downloaded stuff/unfinished_building_high/` (subdirs with `.fbx` files), it loads procedural terrain, a road spline, and lays out assets in a grid. Without the pack, it falls back to the Fox glTF demo.
 
 ## Current Capabilities
 
 - WebGPU renderer with PBR materials, image-based lighting, shadows, and environment maps
 - ECS runtime with transform hierarchy, scheduler phases, and data-oriented component storage
-- Asset pipeline for textures, HDR environments, and glTF scenes with animation support
+- Asset pipeline for glTF/GLB, FBX, HDR environments, and textures
 - Skeletal animation and skinned rendering
 - Spatial audio integrated into ECS
-- AI command APIs, inference hooks, and transports for agent integration
-- In-engine devtools plus a scene editor with hierarchy, properties, assets, and viewport controls
+- Procedural world generation: terrain, splines, biomes, scatter rules, seed-based reproducibility
+- Particle effects with spline- and terrain-aware spawning
+- AI command APIs: scene (spawn, list, inspect, setLabel), world (terrain, spline, scatter), editor (viewport, overlays), VFX, geometry stats
+- In-engine devtools plus a scene editor with hierarchy, properties, assets, viewport controls, and transform gizmos
 
 ## Project Layout
 
@@ -94,7 +102,9 @@ Contributions are welcome. See `CONTRIBUTING.md` for development workflow and ex
 - **Phase 3** — Lighting and materials ✓
 - **Phase 4** — Animation and world systems ✓
 - **Phase 5** — Audio, tooling, and AI integration ✓
-- **Phase 6** — Scene editor and engine vertical slice *(current)*
+- **Phase 6** — Scene editor and engine vertical slice ✓
+- **Phase 7** — Viewport observability, gizmos, asset layout ✓
+- **Phase 8** — Procedural world foundations, VFX core, lighting, geometry scalability ✓
 
 ## Internal Design Mantra
 

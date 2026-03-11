@@ -4,14 +4,15 @@ import type { World } from './world.js';
 import type { Query } from './query.js';
 
 /**
- * Local-space transform: position, euler Y rotation, and uniform scale.
- * Full quaternion rotation can be added later; Y-rotation covers Phase 2 needs.
+ * Local-space transform: position, Euler rotation, and non-uniform scale.
  */
 export const LocalTransform = defineComponent('LocalTransform', {
   px: FieldType.F32,
   py: FieldType.F32,
   pz: FieldType.F32,
+  rotX: FieldType.F32,
   rotY: FieldType.F32,
+  rotZ: FieldType.F32,
   scaleX: FieldType.F32,
   scaleY: FieldType.F32,
   scaleZ: FieldType.F32,
@@ -61,29 +62,33 @@ export const HierarchyDepth = defineComponent('HierarchyDepth', {
  */
 function localToMatrix(
   px: number, py: number, pz: number,
-  rotY: number,
+  rotX: number, rotY: number, rotZ: number,
   sx: number, sy: number, sz: number,
   out: Float32Array, offset: number,
 ): void {
-  const c = Math.cos(rotY);
-  const s = Math.sin(rotY);
+  const cx = Math.cos(rotX);
+  const sxSin = Math.sin(rotX);
+  const cy = Math.cos(rotY);
+  const sySin = Math.sin(rotY);
+  const cz = Math.cos(rotZ);
+  const szSin = Math.sin(rotZ);
 
-  // Column 0
-  out[offset + 0] = c * sx;
-  out[offset + 1] = 0;
-  out[offset + 2] = s * sx;
+  // Rotation order: Z * Y * X, then scale each local axis.
+  out[offset + 0] = cz * cy * sx;
+  out[offset + 1] = szSin * cy * sx;
+  out[offset + 2] = -sySin * sx;
   out[offset + 3] = 0;
-  // Column 1
-  out[offset + 4] = 0;
-  out[offset + 5] = sy;
-  out[offset + 6] = 0;
+
+  out[offset + 4] = (cz * sxSin * sySin - szSin * cx) * sy;
+  out[offset + 5] = (szSin * sxSin * sySin + cz * cx) * sy;
+  out[offset + 6] = sxSin * cy * sy;
   out[offset + 7] = 0;
-  // Column 2
-  out[offset + 8] = -s * sz;
-  out[offset + 9] = 0;
-  out[offset + 10] = c * sz;
+
+  out[offset + 8] = (cz * cx * sySin + szSin * sxSin) * sz;
+  out[offset + 9] = (szSin * cx * sySin - cz * sxSin) * sz;
+  out[offset + 10] = cx * cy * sz;
   out[offset + 11] = 0;
-  // Column 3
+
   out[offset + 12] = px;
   out[offset + 13] = py;
   out[offset + 14] = pz;
@@ -130,7 +135,9 @@ export function createTransformSystem(world: World): {
       const lt_px = arch.getColumn(LocalTransform, 'px');
       const lt_py = arch.getColumn(LocalTransform, 'py');
       const lt_pz = arch.getColumn(LocalTransform, 'pz');
+      const lt_rotX = arch.getColumn(LocalTransform, 'rotX');
       const lt_rotY = arch.getColumn(LocalTransform, 'rotY');
+      const lt_rotZ = arch.getColumn(LocalTransform, 'rotZ');
       const lt_sx = arch.getColumn(LocalTransform, 'scaleX');
       const lt_sy = arch.getColumn(LocalTransform, 'scaleY');
       const lt_sz = arch.getColumn(LocalTransform, 'scaleZ');
@@ -159,7 +166,7 @@ export function createTransformSystem(world: World): {
         for (let i = 0; i < count; i++) {
           localToMatrix(
             lt_px[i]!, lt_py[i]!, lt_pz[i]!,
-            lt_rotY[i]!,
+            lt_rotX[i]!, lt_rotY[i]!, lt_rotZ[i]!,
             lt_sx[i]!, lt_sy[i]!, lt_sz[i]!,
             _tempLocal, 0,
           );
@@ -177,7 +184,9 @@ export function createTransformSystem(world: World): {
       const lt_px = arch.getColumn(LocalTransform, 'px');
       const lt_py = arch.getColumn(LocalTransform, 'py');
       const lt_pz = arch.getColumn(LocalTransform, 'pz');
+      const lt_rotX = arch.getColumn(LocalTransform, 'rotX');
       const lt_rotY = arch.getColumn(LocalTransform, 'rotY');
+      const lt_rotZ = arch.getColumn(LocalTransform, 'rotZ');
       const lt_sx = arch.getColumn(LocalTransform, 'scaleX');
       const lt_sy = arch.getColumn(LocalTransform, 'scaleY');
       const lt_sz = arch.getColumn(LocalTransform, 'scaleZ');
@@ -209,7 +218,7 @@ export function createTransformSystem(world: World): {
           // No parent — treat as root
           localToMatrix(
             lt_px[i]!, lt_py[i]!, lt_pz[i]!,
-            lt_rotY[i]!,
+            lt_rotX[i]!, lt_rotY[i]!, lt_rotZ[i]!,
             lt_sx[i]!, lt_sy[i]!, lt_sz[i]!,
             _tempLocal, 0,
           );
@@ -224,7 +233,7 @@ export function createTransformSystem(world: World): {
 
         localToMatrix(
           lt_px[i]!, lt_py[i]!, lt_pz[i]!,
-          lt_rotY[i]!,
+          lt_rotX[i]!, lt_rotY[i]!, lt_rotZ[i]!,
           lt_sx[i]!, lt_sy[i]!, lt_sz[i]!,
           _tempLocal, 0,
         );

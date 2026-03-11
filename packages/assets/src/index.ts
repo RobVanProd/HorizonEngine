@@ -19,3 +19,9 @@ export {
   buildSkeletonsAndClips,
   type LoadedGltfScene,
 } from './gltf-scene.js';
+export {
+  loadFbxScene,
+  type LoadedFbxScene,
+  type FbxSceneOptions,
+  type SceneBounds,
+} from './fbx-scene.js';

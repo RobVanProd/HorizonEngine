@@ -6,6 +6,7 @@ import {
 import {
   GPUMesh, createSphere, createPlane,
 } from '@engine/renderer-webgpu';
+import { getWorldRegistry, SplineKind } from '@engine/world';
 import { injectEditorStyles, COLORS, SIZES, el } from './ui/theme.js';
 import { MenuBar, type MenuGroup } from './ui/menu-bar.js';
 import { Toolbar, type ToolMode, type PlayState } from './ui/toolbar.js';
@@ -328,6 +329,8 @@ export class Editor {
       { id: 'new-entity', title: 'Create Empty Entity', subtitle: 'Scene', keywords: ['entity', 'create', 'scene'], action: () => this._addEntity() },
       { id: 'sphere', title: 'Add Sphere', subtitle: 'Primitive', keywords: ['primitive', 'sphere', 'mesh'], action: () => this._addPrimitive('sphere') },
       { id: 'plane', title: 'Add Plane', subtitle: 'Primitive', keywords: ['primitive', 'plane', 'ground'], action: () => this._addPrimitive('plane') },
+      { id: 'terrain', title: 'Generate Terrain Patch', subtitle: 'World', keywords: ['terrain', 'world', 'biome', 'procedural'], action: () => this._createTerrainPatch() },
+      { id: 'road-spline', title: 'Create Road Spline', subtitle: 'World', keywords: ['spline', 'road', 'path', 'world'], action: () => this._createRoadSpline() },
       { id: 'focus', title: 'Focus Selected', subtitle: 'Viewport', keywords: ['camera', 'focus'], action: () => this._focusSelected() },
       { id: 'toggle-grid', title: 'Toggle Grid', subtitle: 'Viewport', keywords: ['grid', 'viewport'], action: () => { this.viewport.showGrid = !this.viewport.showGrid; } },
       { id: 'world-tab', title: 'Open World Workspace', subtitle: 'Left Panel', keywords: ['world', 'hierarchy'], action: () => this._setLeftTab('world') },
@@ -377,6 +380,15 @@ export class Editor {
       `Audio clips: ${this.engine.audioClips.size}`,
       `Camera: ${this.engine.cameraEye.map((v) => v.toFixed(2)).join(', ')}`,
     ];
+    const geoStats = this.engine.pbrRenderer.frameStats;
+    renderState.push(`Draws: ${geoStats.drawCount}`);
+    renderState.push(`Triangles: ${geoStats.triangleCount}`);
+    renderState.push(`Meshlets: ${geoStats.meshletCount}`);
+    renderState.push(`Culled: ${geoStats.culledObjects}`);
+    const worldRegistry = getWorldRegistry(this.engine);
+    renderState.push(`Terrains: ${worldRegistry.terrains.size}`);
+    renderState.push(`Splines: ${worldRegistry.splines.size}`);
+    renderState.push(`Scatter layers: ${worldRegistry.scatters.size}`);
     this._systemsPanel.appendChild(this._infoCard('Runtime State', renderState));
   }
 
@@ -387,6 +399,8 @@ export class Editor {
     const actions = [
       { label: 'Explain Selection', action: () => this.statusBar.setLeft(`Assist: inspect Entity #${this.selection.first ?? 'none'}`) },
       { label: 'Generate Material Setup', action: () => this._setRightTab('inspector') },
+      { label: 'Generate Terrain Patch', action: () => this._createTerrainPatch() },
+      { label: 'Create Road Spline', action: () => this._createRoadSpline() },
       { label: 'Open Systems Context', action: () => this._setRightTab('systems') },
       { label: 'Create Primitive', action: () => this._openCommandPalette() },
       { label: 'Save Scene Snapshot', action: () => this.serializer.downloadScene() },
@@ -444,7 +458,7 @@ export class Editor {
         label: 'File',
         items: [
           { label: 'New Scene', shortcut: 'Ctrl+N', action: () => this._newScene() },
-          { label: 'Open Scene...', shortcut: 'Ctrl+O', action: () => this.serializer.loadSceneFile() },
+          { label: 'Open Scene...', shortcut: 'Ctrl+O', action: () => this.serializer.loadSceneFile({ replace: true }) },
           { label: 'Save Scene', shortcut: 'Ctrl+S', action: () => this.serializer.downloadScene() },
           { separator: true, label: '' },
           { label: 'Import Asset...', action: () => this._importAsset() },
@@ -479,6 +493,9 @@ export class Editor {
           { label: 'Front', action: () => this.viewport.camera.setPreset('front') },
           { label: 'Right', action: () => this.viewport.camera.setPreset('right') },
           { separator: true, label: '' },
+          { label: 'Toggle Bounds Overlay', action: () => { this.viewport.toggleOverlay('bounds'); } },
+          { label: 'Toggle Audio Overlay', action: () => { this.viewport.toggleOverlay('audio'); } },
+          { separator: true, label: '' },
           { label: 'Focus Selected', shortcut: 'F', action: () => this._focusSelected() },
           { label: 'Reset Camera', action: () => { this.viewport.camera.target = [0, 0, 0]; this.viewport.camera.distance = 10; } },
         ],
@@ -490,6 +507,9 @@ export class Editor {
           { label: 'Add Cube', action: () => this._addPrimitive('cube') },
           { label: 'Add Sphere', action: () => this._addPrimitive('sphere') },
           { label: 'Add Plane', action: () => this._addPrimitive('plane') },
+          { separator: true, label: '' },
+          { label: 'Generate Terrain Patch', action: () => this._createTerrainPatch() },
+          { label: 'Create Road Spline', action: () => this._createRoadSpline() },
           { separator: true, label: '' },
           { label: 'Clear Scene', action: () => this._clearScene() },
         ],
@@ -573,22 +593,14 @@ export class Editor {
   }
 
   private _newScene(): void {
-    // Destroy all entities
-    this._clearScene();
+    this.serializer.clearScene();
+    this.selection.clear();
     this.undoStack.clear();
     this.statusBar.setLeft('New scene created');
   }
 
   private _clearScene(): void {
-    const world = this.engine.world;
-    const ids: number[] = [];
-    world.query(Visible).each((arch, count) => {
-      const data = arch.entities.data as Uint32Array;
-      for (let i = 0; i < count; i++) ids.push(data[i]!);
-    });
-    for (const id of ids) {
-      if (world.has(id)) world.destroy(id);
-    }
+    this.serializer.clearScene();
     this.selection.clear();
   }
 
@@ -645,7 +657,7 @@ export class Editor {
     const world = this.engine.world;
     const id = world.spawn().id;
     world.addComponent(id, LocalTransform, {
-      px: 0, py: 0, pz: 0, rotY: 0,
+      px: 0, py: 0, pz: 0, rotX: 0, rotY: 0, rotZ: 0,
       scaleX: 1, scaleY: 1, scaleZ: 1,
     });
     world.addComponent(id, WorldMatrix, {
@@ -655,6 +667,7 @@ export class Editor {
       m12: 0, m13: 0, m14: 0, m15: 1,
     });
     world.addComponent(id, Visible);
+    this.engine.setEntityLabel(id, 'Empty Entity');
     this.selection.select(id);
     this.statusBar.setLeft(`Created Entity #${id}`);
   }
@@ -673,7 +686,7 @@ export class Editor {
 
     const id = this.engine.world.spawn().id;
     this.engine.world.addComponent(id, LocalTransform, {
-      px: 0, py: type === 'plane' ? 0 : 1, pz: 0, rotY: 0,
+      px: 0, py: type === 'plane' ? 0 : 1, pz: 0, rotX: 0, rotY: 0, rotZ: 0,
       scaleX: 1, scaleY: 1, scaleZ: 1,
     });
     this.engine.world.addComponent(id, WorldMatrix, {
@@ -687,10 +700,62 @@ export class Editor {
     this.engine.world.addComponent(id, MaterialRef);
     this.engine.world.setField(id, MeshRef, 'handle', meshHandle);
     this.engine.world.setField(id, MaterialRef, 'handle', matHandle);
+    this.engine.setEntityLabel(id, `${type.charAt(0).toUpperCase() + type.slice(1)} Primitive`);
 
     this.selection.select(id);
     this.statusBar.setLeft(`Added ${type} (Entity #${id})`);
     this.assetBrowser.refresh();
+  }
+
+  private _createTerrainPatch(): void {
+    const registry = getWorldRegistry(this.engine);
+    const center = this.viewport.camera.target;
+    const created = registry.spawnTerrain({
+      seed: Date.now() >>> 0,
+      width: 64,
+      depth: 64,
+      cellSize: 2,
+      originX: center[0] - 64,
+      originZ: center[2] - 64,
+      baseHeight: Math.max(0, center[1] - 2),
+      heightScale: 18,
+      stableAssetId: 1000 + this.engine.world.entityCount,
+    });
+    this.assetBrowser.addAsset({
+      id: `terrain-${created.entityId}`,
+      name: `Terrain #${created.entityId}`,
+      type: 'scene',
+      path: `terrain:${created.entityId}`,
+    });
+    this.selection.select(created.entityId);
+    this.engine.setEntityLabel(created.entityId, `Terrain Patch ${created.entityId}`);
+    this.statusBar.setLeft(`Generated terrain patch Entity #${created.entityId}`);
+    this._setLeftTab('content');
+  }
+
+  private _createRoadSpline(): void {
+    const registry = getWorldRegistry(this.engine);
+    const center = this.viewport.camera.target;
+    const created = registry.spawnSpline([
+      { position: [center[0] - 18, center[1], center[2] - 6] },
+      { position: [center[0] - 6, center[1], center[2] + 2] },
+      { position: [center[0] + 8, center[1], center[2] - 3] },
+      { position: [center[0] + 18, center[1], center[2] + 7] },
+    ], {
+      width: 6,
+      kind: SplineKind.Road,
+      stableAssetId: 2000 + this.engine.world.entityCount,
+    });
+    this.assetBrowser.addAsset({
+      id: `spline-${created.entityId}`,
+      name: `Spline #${created.entityId}`,
+      type: 'scene',
+      path: `spline:${created.entityId}`,
+    });
+    this.selection.select(created.entityId);
+    this.engine.setEntityLabel(created.entityId, 'Road Spline');
+    this.statusBar.setLeft(`Created road spline Entity #${created.entityId}`);
+    this._setLeftTab('world');
   }
 
   private _setupViewportAssetDrop(): void {
@@ -762,7 +827,9 @@ export class Editor {
       px: center[0],
       py: center[1] + 1,
       pz: center[2],
+      rotX: 0,
       rotY: 0,
+      rotZ: 0,
       scaleX: 1,
       scaleY: 1,
       scaleZ: 1,
@@ -780,6 +847,7 @@ export class Editor {
     }
     world.addComponent(id, MaterialRef);
     world.setField(id, MaterialRef, 'handle', defaultMat);
+    this.engine.setEntityLabel(id, label);
     this.selection.select(id);
     this.assetBrowser.refresh();
     this.statusBar.setCenter(`${label} ready`);
@@ -804,7 +872,8 @@ export class Editor {
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (ext === 'hscene' || ext === 'json') {
         file.text().then(text => {
-          this.serializer.fromJSON(text);
+          this.serializer.fromJSON(text, { replace: true });
+          this.selection.clear();
           this.statusBar.setLeft(`Loaded scene: ${file.name}`);
         });
       } else {

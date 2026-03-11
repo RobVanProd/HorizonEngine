@@ -1,5 +1,5 @@
 import {
-  mat4Perspective, mat4LookAt, mat4Multiply, mat4Identity,
+  mat4Perspective, mat4Ortho, mat4LookAt, mat4Multiply, mat4Identity,
 } from '@engine/renderer-webgpu';
 
 export type CameraMode = 'orbit' | 'pan' | 'fly';
@@ -12,9 +12,10 @@ export class EditorCamera {
   pitch = -Math.PI * 0.2;
   fov = 60;
   near = 0.1;
-  far = 500;
+  far = 5000;
   ortho = false;
   enabled = true;
+  orthoSize = 10;
 
   private _mode: CameraMode = 'orbit';
   private _canvas: HTMLElement | null = null;
@@ -122,7 +123,16 @@ export class EditorCamera {
   getViewProjection(aspect: number): Float32Array {
     const eye = this.getEye();
     const fovRad = this.fov * Math.PI / 180;
-    const proj = mat4Perspective(fovRad, aspect, this.near, this.far);
+    const proj = this.ortho
+      ? mat4Ortho(
+        -this.orthoSize * aspect,
+        this.orthoSize * aspect,
+        -this.orthoSize,
+        this.orthoSize,
+        this.near,
+        this.far,
+      )
+      : mat4Perspective(fovRad, aspect, this.near, this.far);
     const view = mat4LookAt(eye, this.target, [0, 1, 0]);
     return mat4Multiply(proj, view);
   }
@@ -169,7 +179,7 @@ export class EditorCamera {
       this.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.pitch + dy * 0.005));
     } else if (this._button === 2 || (this._button === 0 && e.shiftKey)) {
       // Pan
-      const panSpeed = this.distance * 0.002;
+      const panSpeed = this.ortho ? this.orthoSize * 0.004 : this.distance * 0.002;
       const right = this._getRight();
       const up: [number, number, number] = [0, 1, 0];
       this.target[0] -= (right[0] * dx + up[0] * -dy) * panSpeed;
@@ -189,7 +199,11 @@ export class EditorCamera {
     if (!this.enabled) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? 1.1 : 0.9;
-    this.distance = Math.max(0.5, Math.min(200, this.distance * factor));
+    if (this.ortho) {
+      this.orthoSize = Math.max(0.5, Math.min(200, this.orthoSize * factor));
+    } else {
+      this.distance = Math.max(0.5, Math.min(200, this.distance * factor));
+    }
   }
 
   private _getForward(): [number, number, number] {

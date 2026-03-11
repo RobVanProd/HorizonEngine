@@ -34,7 +34,7 @@ struct VOut {
 
 const MAX_VERTS = 8192;
 const FLOATS_PER_VERT = 7; // xyz + rgba
-const THICKNESS_RATIO = 0.012;
+const THICKNESS_RATIO = 0.03;
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 export type GizmoAxis = 'x' | 'y' | 'z' | 'xy' | 'xz' | 'yz' | null;
@@ -56,6 +56,7 @@ function hexToRgba(hex: string): [number, number, number, number] {
 }
 
 const HOVER_COLOR = hexToRgba(COLORS.gizmoHover);
+const SELECTION_COLOR = hexToRgba(COLORS.selectionBorder);
 
 export class GizmoRenderer {
   private _device: GPUDevice;
@@ -161,8 +162,18 @@ export class GizmoRenderer {
 
     if (axisHint === 'x') {
       this._pushLine(
+        [p0[0], p0[1] - thickness, p0[2]],
+        [p1[0], p1[1] - thickness, p1[2]],
+        color,
+      );
+      this._pushLine(
         [p0[0], p0[1] + thickness, p0[2]],
         [p1[0], p1[1] + thickness, p1[2]],
+        color,
+      );
+      this._pushLine(
+        [p0[0], p0[1], p0[2] - thickness],
+        [p1[0], p1[1], p1[2] - thickness],
         color,
       );
       this._pushLine(
@@ -175,8 +186,18 @@ export class GizmoRenderer {
 
     if (axisHint === 'y') {
       this._pushLine(
+        [p0[0] - thickness, p0[1], p0[2]],
+        [p1[0] - thickness, p1[1], p1[2]],
+        color,
+      );
+      this._pushLine(
         [p0[0] + thickness, p0[1], p0[2]],
         [p1[0] + thickness, p1[1], p1[2]],
+        color,
+      );
+      this._pushLine(
+        [p0[0], p0[1], p0[2] - thickness],
+        [p1[0], p1[1], p1[2] - thickness],
         color,
       );
       this._pushLine(
@@ -189,8 +210,18 @@ export class GizmoRenderer {
 
     if (axisHint === 'z') {
       this._pushLine(
+        [p0[0] - thickness, p0[1], p0[2]],
+        [p1[0] - thickness, p1[1], p1[2]],
+        color,
+      );
+      this._pushLine(
         [p0[0] + thickness, p0[1], p0[2]],
         [p1[0] + thickness, p1[1], p1[2]],
+        color,
+      );
+      this._pushLine(
+        [p0[0], p0[1] - thickness, p0[2]],
+        [p1[0], p1[1] - thickness, p1[2]],
         color,
       );
       this._pushLine(
@@ -202,8 +233,18 @@ export class GizmoRenderer {
     }
 
     this._pushLine(
+      [p0[0] - thickness, p0[1], p0[2]],
+      [p1[0] - thickness, p1[1], p1[2]],
+      color,
+    );
+    this._pushLine(
       [p0[0] + thickness, p0[1], p0[2]],
       [p1[0] + thickness, p1[1], p1[2]],
+      color,
+    );
+    this._pushLine(
+      [p0[0], p0[1] - thickness, p0[2]],
+      [p1[0], p1[1] - thickness, p1[2]],
       color,
     );
     this._pushLine(
@@ -255,9 +296,10 @@ export class GizmoRenderer {
     const s = scale;
     const segs = 48;
 
-    // LocalTransform currently supports yaw only, so expose a single Y rotation ring.
     const ringAxes: Array<{ axis: GizmoAxis; genPoint: (t: number) => [number, number, number] }> = [
+      { axis: 'x', genPoint: (t) => [center[0], center[1] + Math.cos(t) * s, center[2] + Math.sin(t) * s] },
       { axis: 'y', genPoint: (t) => [center[0] + Math.cos(t) * s, center[1], center[2] + Math.sin(t) * s] },
+      { axis: 'z', genPoint: (t) => [center[0] + Math.cos(t) * s, center[1] + Math.sin(t) * s, center[2]] },
     ];
 
     for (const { axis, genPoint } of ringAxes) {
@@ -295,6 +337,30 @@ export class GizmoRenderer {
         const b: [number, number, number] = [end[0] - off[0], end[1] - off[1], end[2] - off[2]];
         this._pushThickLine(a, b, col, 'free', s);
       }
+    }
+  }
+
+  drawSelectionBounds(center: [number, number, number], radius: number): void {
+    const [cx, cy, cz] = center;
+    const r = radius;
+    const corners: Array<[number, number, number]> = [
+      [cx - r, cy - r, cz - r],
+      [cx + r, cy - r, cz - r],
+      [cx + r, cy + r, cz - r],
+      [cx - r, cy + r, cz - r],
+      [cx - r, cy - r, cz + r],
+      [cx + r, cy - r, cz + r],
+      [cx + r, cy + r, cz + r],
+      [cx - r, cy + r, cz + r],
+    ];
+    const edges: Array<[number, number]> = [
+      [0, 1], [1, 2], [2, 3], [3, 0],
+      [4, 5], [5, 6], [6, 7], [7, 4],
+      [0, 4], [1, 5], [2, 6], [3, 7],
+    ];
+
+    for (const [a, b] of edges) {
+      this._pushThickLine(corners[a]!, corners[b]!, [SELECTION_COLOR[0], SELECTION_COLOR[1], SELECTION_COLOR[2], 0.95], 'free', r);
     }
   }
 

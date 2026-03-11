@@ -151,10 +151,7 @@ async function main() {
 
       const t = node.translation;
       const s = node.scale;
-      const rotY = Math.atan2(
-        2 * (node.rotation[3] * node.rotation[1] + node.rotation[0] * node.rotation[2]),
-        1 - 2 * (node.rotation[0] ** 2 + node.rotation[1] ** 2),
-      );
+      const [rotX, rotY, rotZ] = quaternionToEulerXYZ(node.rotation);
 
       // Apply model scale to root nodes (those with a mesh or skin)
       const isRoot = gltfScene.rootNodes.includes(ni);
@@ -166,7 +163,9 @@ async function main() {
         px: t[0] * (isRoot ? MODEL_SCALE : 1),
         py: t[1] * (isRoot ? MODEL_SCALE : 1),
         pz: t[2] * (isRoot ? MODEL_SCALE : 1),
+        rotX,
         rotY,
+        rotZ,
         scaleX: sx, scaleY: sy, scaleZ: sz,
       });
       entity.add(WorldMatrix, {
@@ -226,7 +225,7 @@ async function main() {
 
     const ground = world.spawn();
     ground.add(LocalTransform, {
-      px: 0, py: 0, pz: 0, rotY: 0,
+      px: 0, py: 0, pz: 0, rotX: 0, rotY: 0, rotZ: 0,
       scaleX: 1, scaleY: 1, scaleZ: 1,
     });
     ground.add(WorldMatrix, {
@@ -256,7 +255,7 @@ async function main() {
       const { handle: matH } = engine.createMaterial(sm);
       const e = world.spawn();
       e.add(LocalTransform, {
-        px: -3 + i * 3, py: 0.5, pz: 4, rotY: 0,
+        px: -3 + i * 3, py: 0.5, pz: 4, rotX: 0, rotY: 0, rotZ: 0,
         scaleX: 1, scaleY: 1, scaleZ: 1,
       });
       e.add(WorldMatrix, {
@@ -520,6 +519,21 @@ async function main() {
     errorBanner.style.display = 'block';
     errorBanner.innerHTML = `<h2>Error</h2><pre>${err.message}\n\n${err.stack ?? ''}</pre>`;
   }
+}
+
+function quaternionToEulerXYZ(q: [number, number, number, number]): [number, number, number] {
+  const [x, y, z, w] = q;
+  const sinrCosp = 2 * (w * x + y * z);
+  const cosrCosp = 1 - 2 * (x * x + y * y);
+  const rotX = Math.atan2(sinrCosp, cosrCosp);
+
+  const sinp = 2 * (w * y - z * x);
+  const rotY = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
+
+  const sinyCosp = 2 * (w * z + x * y);
+  const cosyCosp = 1 - 2 * (y * y + z * z);
+  const rotZ = Math.atan2(sinyCosp, cosyCosp);
+  return [rotX, rotY, rotZ];
 }
 
 async function loadEmbeddedTexture(

@@ -96,7 +96,7 @@ export class PropertiesPanel {
       marginBottom: '8px',
     });
     const eName = el('div', { fontSize: FONT.size.lg, fontWeight: '600', color: COLORS.accent });
-    eName.textContent = `Entity #${id}`;
+    eName.textContent = this._engine.getEntityLabel(id) ?? `Entity #${id}`;
     eHeader.appendChild(eName);
 
     const delBtn = document.createElement('button');
@@ -109,6 +109,7 @@ export class PropertiesPanel {
     });
     eHeader.appendChild(delBtn);
     this._content.appendChild(eHeader);
+    this._content.appendChild(this._buildObservabilitySection(id));
 
     // Component sections
     for (const comp of KNOWN_COMPONENTS) {
@@ -239,6 +240,88 @@ export class PropertiesPanel {
     }
 
     container.appendChild(menu);
+  }
+
+  private _buildObservabilitySection(entityId: number): HTMLElement {
+    const world = this._engine.world;
+    const section = el('div', {
+      marginBottom: '6px',
+      borderRadius: '4px',
+      background: COLORS.surface,
+      overflow: 'hidden',
+    });
+    const sectionHeader = el('div', {
+      padding: '4px 8px',
+      background: COLORS.surfaceHover,
+      fontWeight: '600',
+      color: COLORS.accentDim,
+      fontSize: FONT.size.sm,
+    });
+    sectionHeader.textContent = 'Observability';
+    section.appendChild(sectionHeader);
+
+    const body = el('div', { padding: '6px 8px' });
+    const rows: Array<[string, string]> = [];
+
+    if (world.hasComponent(entityId, LocalTransform)) {
+      const px = world.getField(entityId, LocalTransform, 'px');
+      const py = world.getField(entityId, LocalTransform, 'py');
+      const pz = world.getField(entityId, LocalTransform, 'pz');
+      const sx = world.getField(entityId, LocalTransform, 'scaleX');
+      const sy = world.getField(entityId, LocalTransform, 'scaleY');
+      const sz = world.getField(entityId, LocalTransform, 'scaleZ');
+      rows.push(['position', `${formatValue(px)}, ${formatValue(py)}, ${formatValue(pz)}`]);
+      rows.push(['scale', `${formatValue(sx)}, ${formatValue(sy)}, ${formatValue(sz)}`]);
+      const eye = this._engine.cameraEye;
+      rows.push(['eyeDist', formatValue(Math.hypot(eye[0] - px, eye[1] - py, eye[2] - pz))]);
+    }
+
+    if (world.hasComponent(entityId, MeshRef)) {
+      const meshHandle = world.getField(entityId, MeshRef, 'handle');
+      rows.push(['mesh', `#${meshHandle}`]);
+      const mesh = this._engine.meshes.get(meshHandle);
+      if (mesh) {
+        rows.push(['tris', String(Math.round(mesh.indexCount / 3))]);
+        rows.push([
+          'bounds',
+          `${formatValue(mesh.boundsMin[0])}, ${formatValue(mesh.boundsMin[1])}, ${formatValue(mesh.boundsMin[2])} -> ` +
+          `${formatValue(mesh.boundsMax[0])}, ${formatValue(mesh.boundsMax[1])}, ${formatValue(mesh.boundsMax[2])}`,
+        ]);
+      }
+    }
+
+    if (world.hasComponent(entityId, MaterialRef)) {
+      rows.push(['material', `#${world.getField(entityId, MaterialRef, 'handle')}`]);
+    }
+    if (world.hasComponent(entityId, Visible)) {
+      rows.push(['visible', 'yes']);
+    }
+
+    for (const [labelText, valueText] of rows) {
+      const row = el('div', {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: '8px',
+        padding: '1px 0',
+      });
+      const label = el('span', { color: COLORS.textDim, fontSize: FONT.size.xs, minWidth: '70px' });
+      label.textContent = labelText;
+      const value = el('span', {
+        color: COLORS.textMuted,
+        fontSize: FONT.size.xs,
+        fontFamily: FONT.mono,
+        textAlign: 'right',
+        whiteSpace: 'pre-wrap',
+      });
+      value.textContent = valueText;
+      row.appendChild(label);
+      row.appendChild(value);
+      body.appendChild(row);
+    }
+
+    section.appendChild(body);
+    return section;
   }
 
   destroy(): void {

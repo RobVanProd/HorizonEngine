@@ -1,3 +1,5 @@
+import { PBR_SKINNED_VERTEX_STRIDE, PBR_VERTEX_STRIDE } from '@engine/renderer-webgpu';
+
 /**
  * GPU object picking via a color-ID render pass.
  * Each entity is rendered with a unique color encoding its ID.
@@ -28,7 +30,8 @@ struct VOut {
 
 export class PickPass {
   private _device: GPUDevice;
-  private _pipeline: GPURenderPipeline | null = null;
+  private _pipelineStatic: GPURenderPipeline | null = null;
+  private _pipelineSkinned: GPURenderPipeline | null = null;
   private _camBuffer: GPUBuffer;
   private _camBG: GPUBindGroup | null = null;
   private _objLayout: GPUBindGroupLayout | null = null;
@@ -52,7 +55,7 @@ export class PickPass {
   }
 
   private _ensurePipeline(): void {
-    if (this._pipeline) return;
+    if (this._pipelineStatic && this._pipelineSkinned) return;
     const d = this._device;
 
     const shader = d.createShaderModule({ code: PICK_SHADER, label: 'pick-shader' });
@@ -69,26 +72,9 @@ export class PickPass {
       entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
     });
 
-    this._pipeline = d.createRenderPipeline({
-      layout: d.createPipelineLayout({ bindGroupLayouts: [camLayout, this._objLayout] }),
-      vertex: {
-        module: shader, entryPoint: 'vs',
-        buffers: [{
-          arrayStride: 56, // PBR vertex: pos(12) + normal(12) + uv(8) + tangent(16) + padding to stride
-          attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }],
-        }],
-      },
-      fragment: {
-        module: shader, entryPoint: 'fs',
-        targets: [{ format: 'r32uint' }],
-      },
-      primitive: { topology: 'triangle-list', cullMode: 'back' },
-      depthStencil: {
-        format: 'depth24plus',
-        depthWriteEnabled: true,
-        depthCompare: 'less',
-      },
-    });
+    const layout = d.createPipelineLayout({ bindGroupLayouts: [camLayout, this._objLayout] });
+    this._pipelineStatic = this._createPipeline(layout, shader, PBR_VERTEX_STRIDE);
+    this._pipelineSkinned = this._createPipeline(layout, shader, PBR_SKINNED_VERTEX_STRIDE);
   }
 
   private _ensureTextures(w: number, h: number): void {
@@ -121,6 +107,11 @@ export class PickPass {
     });
   }
 
+  getPipeline(skinned: boolean): GPURenderPipeline {
+    this._ensurePipeline();
+    return skinned ? this._pipelineSkinned! : this._pipelineStatic!;
+  }
+
   /**
    * Render the pick pass. Caller supplies a callback that receives the encoder
    * to set vertex buffers and issue draw calls.
@@ -151,7 +142,6 @@ export class PickPass {
       },
     });
 
-    pass.setPipeline(this._pipeline!);
     pass.setBindGroup(0, this._camBG!);
 
     drawCallback(pass, this._objLayout!);
@@ -182,5 +172,34 @@ export class PickPass {
     this._readBuffer.destroy();
     this._pickTexture?.destroy();
     this._pickDepth?.destroy();
+  }
+
+  private _createPipeline(
+    layout: GPUPipelineLayout,
+    shader: GPUShaderModule,
+    arrayStride: number,
+  ): GPURenderPipeline {
+    return this._device.createRenderPipeline({
+      layout,
+      vertex: {
+        module: shader,
+        entryPoint: 'vs',
+        buffers: [{
+          arrayStride,
+          attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }],
+        }],
+      },
+      fragment: {
+        module: shader,
+        entryPoint: 'fs',
+        targets: [{ format: 'r32uint' }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'back' },
+      depthStencil: {
+        format: 'depth24plus',
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+      },
+    });
   }
 }

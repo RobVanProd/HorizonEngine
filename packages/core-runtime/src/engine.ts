@@ -47,6 +47,8 @@ export class Engine {
   readonly materials = new Map<number, PBRMaterial>();
   /** Audio clip registry — maps numeric handles to AudioEngine buffer handles. */
   readonly audioClips = new Map<number, AudioHandle>();
+  /** Human-readable scene labels for hierarchy and tooling surfaces. */
+  readonly entityLabels = new Map<number, string>();
 
   private _canvas!: ManagedCanvas;
   private _gpu!: GPUContext;
@@ -63,6 +65,9 @@ export class Engine {
     intensity: 3.0,
     ambient: [0.01, 0.01, 0.02],
     envIntensity: 1.0,
+    pointLights: [],
+    shadowBias: 0.003,
+    debugView: 'lit',
   };
 
   private _cameraVP = new Float32Array(16);
@@ -107,6 +112,19 @@ export class Engine {
   setCamera(vp: Float32Array, eye: [number, number, number]): void {
     this._cameraVP.set(vp);
     this._cameraEye = eye;
+  }
+
+  setEntityLabel(entityId: number, label: string | null | undefined): void {
+    const trimmed = label?.trim();
+    if (!trimmed) {
+      this.entityLabels.delete(entityId);
+      return;
+    }
+    this.entityLabels.set(entityId, trimmed);
+  }
+
+  getEntityLabel(entityId: number): string | undefined {
+    return this.entityLabels.get(entityId);
   }
 
   /** Allocate a handle, register a mesh, and return the handle. */

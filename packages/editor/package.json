@@ -14,6 +14,7 @@
     "@engine/memory": "workspace:*",
     "@engine/profiler": "workspace:*",
     "@engine/renderer-webgpu": "workspace:*",
-    "@engine/scheduler": "workspace:*"
+    "@engine/scheduler": "workspace:*",
+    "@engine/world": "workspace:*"
   }
 }

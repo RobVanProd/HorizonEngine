@@ -12,9 +12,11 @@
     "@engine/audio": "workspace:*",
     "@engine/core": "workspace:*",
     "@engine/ecs": "workspace:*",
+    "@engine/effects": "workspace:*",
     "@engine/memory": "workspace:*",
     "@engine/profiler": "workspace:*",
     "@engine/renderer-webgpu": "workspace:*",
-    "@engine/scheduler": "workspace:*"
+    "@engine/scheduler": "workspace:*",
+    "@engine/world": "workspace:*"
   }
 }

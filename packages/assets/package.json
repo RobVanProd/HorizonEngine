@@ -13,6 +13,7 @@
     "@engine/core": "workspace:*",
     "@engine/ecs": "workspace:*",
     "@engine/memory": "workspace:*",
-    "@engine/renderer-webgpu": "workspace:*"
+    "@engine/renderer-webgpu": "workspace:*",
+    "three": "^0.183.2"
   }
 }

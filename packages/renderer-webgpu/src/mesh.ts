@@ -53,6 +53,11 @@ export class GPUMesh {
   readonly vertexCount: number;
   readonly indexCount: number;
   readonly skinned: boolean;
+  readonly triangleCount: number;
+  readonly meshletCount: number;
+  readonly boundsMin: [number, number, number];
+  readonly boundsMax: [number, number, number];
+  readonly boundsRadius: number;
 
   private constructor(
     vertexBuffer: GPUBuffer,
@@ -60,12 +65,22 @@ export class GPUMesh {
     vertexCount: number,
     indexCount: number,
     skinned: boolean,
+    triangleCount: number,
+    meshletCount: number,
+    boundsMin: [number, number, number],
+    boundsMax: [number, number, number],
+    boundsRadius: number,
   ) {
     this.vertexBuffer = vertexBuffer;
     this.indexBuffer = indexBuffer;
     this.vertexCount = vertexCount;
     this.indexCount = indexCount;
     this.skinned = skinned;
+    this.triangleCount = triangleCount;
+    this.meshletCount = meshletCount;
+    this.boundsMin = boundsMin;
+    this.boundsMax = boundsMax;
+    this.boundsRadius = boundsRadius;
   }
 
   static create(device: GPUDevice, data: MeshData): GPUMesh {
@@ -74,6 +89,7 @@ export class GPUMesh {
     const interleaved = hasSkin
       ? interleaveSkinnedVertices(data, vertexCount)
       : interleaveVertices(data, vertexCount);
+    const bounds = computeBounds(data.positions);
 
     const vertexBuffer = device.createBuffer({
       size: interleaved.byteLength,
@@ -91,7 +107,18 @@ export class GPUMesh {
     new Uint32Array(indexBuffer.getMappedRange()).set(data.indices);
     indexBuffer.unmap();
 
-    return new GPUMesh(vertexBuffer, indexBuffer, vertexCount, data.indices.length, hasSkin);
+    return new GPUMesh(
+      vertexBuffer,
+      indexBuffer,
+      vertexCount,
+      data.indices.length,
+      hasSkin,
+      data.indices.length / 3,
+      Math.max(1, Math.ceil((data.indices.length / 3) / 64)),
+      bounds.min,
+      bounds.max,
+      bounds.radius,
+    );
   }
 
   destroy(): void {
@@ -159,4 +186,46 @@ function interleaveSkinnedVertices(data: MeshData, count: number): ArrayBuffer {
   }
 
   return buf;
+}
+
+function computeBounds(positions: Float32Array): {
+  min: [number, number, number];
+  max: [number, number, number];
+  radius: number;
+} {
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i]!;
+    const y = positions[i + 1]!;
+    const z = positions[i + 2]!;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    minZ = Math.min(minZ, z);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+    maxZ = Math.max(maxZ, z);
+  }
+
+  const centerX = (minX + maxX) * 0.5;
+  const centerY = (minY + maxY) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+  let radius = 0;
+  for (let i = 0; i < positions.length; i += 3) {
+    const dx = positions[i]! - centerX;
+    const dy = positions[i + 1]! - centerY;
+    const dz = positions[i + 2]! - centerZ;
+    radius = Math.max(radius, Math.sqrt(dx * dx + dy * dy + dz * dz));
+  }
+
+  return {
+    min: [minX, minY, minZ],
+    max: [maxX, maxY, maxZ],
+    radius,
+  };
 }

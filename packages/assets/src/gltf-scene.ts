@@ -140,11 +140,11 @@ export async function loadGltfScene(
 
     const t = node.translation;
     const s = node.scale;
-    const rotY = quaternionToEulerY(node.rotation);
+    const [rotX, rotY, rotZ] = quaternionToEulerXYZ(node.rotation);
 
     entity.add(LocalTransform, {
       px: t[0], py: t[1], pz: t[2],
-      rotY,
+      rotX, rotY, rotZ,
       scaleX: s[0], scaleY: s[1], scaleZ: s[2],
     });
     entity.add(WorldMatrix, {
@@ -305,9 +305,20 @@ export function buildSkeletonsAndClips(scene: GltfScene): {
   return { skeletons, clips };
 }
 
-function quaternionToEulerY(q: [number, number, number, number]): number {
+function quaternionToEulerXYZ(q: [number, number, number, number]): [number, number, number] {
   const [x, y, z, w] = q;
-  return Math.atan2(2 * (w * y + x * z), 1 - 2 * (x * x + y * y));
+  const sinrCosp = 2 * (w * x + y * z);
+  const cosrCosp = 1 - 2 * (x * x + y * y);
+  const rotX = Math.atan2(sinrCosp, cosrCosp);
+
+  const sinp = 2 * (w * y - z * x);
+  const rotY = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
+
+  const sinyCosp = 2 * (w * z + x * y);
+  const cosyCosp = 1 - 2 * (y * y + z * z);
+  const rotZ = Math.atan2(sinyCosp, cosyCosp);
+
+  return [rotX, rotY, rotZ];
 }
 
 async function loadTextureFromBuffer(

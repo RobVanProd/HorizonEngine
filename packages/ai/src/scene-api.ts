@@ -19,7 +19,7 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
   router.register(
     {
       action: 'scene.spawn',
-      description: 'Spawn a new entity with optional position, rotation, scale, and visibility',
+      description: 'Spawn a new entity with optional position, rotation, scale, visibility, mesh, material, and label',
       params: {
         position: { type: 'array', description: 'XYZ position [x, y, z]', items: { type: 'number' } },
         rotation: { type: 'array', description: 'Euler rotation in radians [x, y, z]', items: { type: 'number' } },
@@ -27,6 +27,7 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
         visible: { type: 'boolean', description: 'Whether the entity is visible', default: true },
         meshHandle: { type: 'number', description: 'Mesh handle from engine.meshes registry' },
         materialHandle: { type: 'number', description: 'Material handle from engine.materials registry' },
+        label: { type: 'string', description: 'Human-readable label for hierarchy and AI observability' },
       },
     },
     (params) => {
@@ -39,7 +40,9 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
 
       eb.add(LocalTransform, {
         px: pos?.[0] ?? 0, py: pos?.[1] ?? 0, pz: pos?.[2] ?? 0,
+        rotX: rot?.[0] ?? 0,
         rotY: rot?.[1] ?? 0,
+        rotZ: rot?.[2] ?? 0,
         scaleX: scl?.[0] ?? 1, scaleY: scl?.[1] ?? 1, scaleZ: scl?.[2] ?? 1,
       });
       eb.add(WorldMatrix);
@@ -53,8 +56,12 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
       if (params['visible'] !== false) {
         eb.add(Visible);
       }
+      const label = params['label'] as string | undefined;
+      if (label != null && String(label).trim()) {
+        engine.setEntityLabel(id, String(label).trim());
+      }
 
-      return { ok: true, data: { entityId: id } };
+      return { ok: true, data: { entityId: id, label: engine.getEntityLabel(id) ?? undefined } };
     },
   );
 
@@ -111,8 +118,29 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
       const id = params['entityId'] as number;
       const rot = params['rotation'] as number[];
       if (!world.has(id)) return { ok: false, error: `Entity ${id} not found` };
+      world.setField(id, LocalTransform, 'rotX', rot[0]!);
       world.setField(id, LocalTransform, 'rotY', rot[1]!);
+      world.setField(id, LocalTransform, 'rotZ', rot[2]!);
       return { ok: true, data: { entityId: id, rotation: rot } };
+    },
+  );
+
+  // ─── scene.setLabel ───────────────────────────────────────────────
+  router.register(
+    {
+      action: 'scene.setLabel',
+      description: 'Set a human-readable label for an entity (for hierarchy and AI observability)',
+      params: {
+        entityId: { type: 'number', required: true, description: 'Target entity' },
+        label: { type: 'string', required: true, description: 'Label text' },
+      },
+    },
+    (params) => {
+      const id = params['entityId'] as number;
+      const label = String(params['label'] ?? '').trim();
+      if (!world.has(id)) return { ok: false, error: `Entity ${id} not found` };
+      engine.setEntityLabel(id, label || null);
+      return { ok: true, data: { entityId: id, label: engine.getEntityLabel(id) ?? undefined } };
     },
   );
 
@@ -202,6 +230,91 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
     },
   );
 
+  // ─── scene.list ───────────────────────────────────────────────────
+  router.register(
+    {
+      action: 'scene.list',
+      description: 'List renderable entities with labels, positions, mesh bounds, and sizes. Use for AI to understand scene contents and generate coherent levels.',
+      params: {
+        components: { type: 'array', description: 'Filter by component names (e.g. ["MeshRef", "Visible"]). Default: MeshRef, Visible', items: { type: 'string' } },
+        limit: { type: 'number', description: 'Max entities to return', default: 200 },
+      },
+    },
+    (params) => {
+      const compNames = (params['components'] as string[] | undefined) ?? ['MeshRef', 'Visible'];
+      const limit = (params['limit'] as number) ?? 200;
+      const compLookup = getComponentLookup();
+      const filterComps = compNames.map(n => compLookup.get(n)).filter(Boolean);
+      if (filterComps.length === 0 && compNames.length > 0) {
+        return { ok: false, error: `Unknown component(s): ${compNames.join(', ')}` };
+      }
+
+      const q = filterComps.length > 0 ? world.query(...(filterComps as any[])) : null;
+      const items: Array<{
+        entityId: number;
+        label: string;
+        position: [number, number, number];
+        scale: [number, number, number];
+        meshHandle?: number;
+        materialHandle?: number;
+        boundsMin?: [number, number, number];
+        boundsMax?: [number, number, number];
+        triangles?: number;
+        radius?: number;
+      }> = [];
+
+      if (q) {
+        q.each((arch, count) => {
+          if (items.length >= limit) return;
+          const ids = arch.entities.data as Uint32Array;
+          for (let i = 0; i < count && items.length < limit; i++) {
+            const id = ids[i]!;
+            const label = engine.getEntityLabel(id) ?? `Entity #${id}`;
+            let position: [number, number, number] = [0, 0, 0];
+            let scale: [number, number, number] = [1, 1, 1];
+            let meshHandle: number | undefined;
+            let materialHandle: number | undefined;
+
+            if (world.hasComponent(id, LocalTransform)) {
+              position = [
+                world.getField(id, LocalTransform, 'px'),
+                world.getField(id, LocalTransform, 'py'),
+                world.getField(id, LocalTransform, 'pz'),
+              ];
+              scale = [
+                world.getField(id, LocalTransform, 'scaleX'),
+                world.getField(id, LocalTransform, 'scaleY'),
+                world.getField(id, LocalTransform, 'scaleZ'),
+              ];
+            }
+            if (world.hasComponent(id, MeshRef)) {
+              meshHandle = world.getField(id, MeshRef, 'handle');
+            }
+            if (world.hasComponent(id, MaterialRef)) {
+              materialHandle = world.getField(id, MaterialRef, 'handle');
+            }
+
+            const entry: (typeof items)[0] = { entityId: id, label, position, scale };
+            if (meshHandle !== undefined) {
+              entry.meshHandle = meshHandle;
+              const mesh = engine.meshes.get(meshHandle);
+              if (mesh) {
+                entry.boundsMin = [mesh.boundsMin[0], mesh.boundsMin[1], mesh.boundsMin[2]];
+                entry.boundsMax = [mesh.boundsMax[0], mesh.boundsMax[1], mesh.boundsMax[2]];
+                entry.triangles = mesh.triangleCount;
+                entry.radius = mesh.boundsRadius;
+              }
+            }
+            if (materialHandle !== undefined) entry.materialHandle = materialHandle;
+            items.push(entry);
+          }
+        });
+      }
+
+      return { ok: true, data: { count: items.length, entities: items } };
+    },
+  );
+
   // ─── scene.query ──────────────────────────────────────────────────
   router.register(
     {
@@ -270,7 +383,8 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
         }
       }
 
-      return { ok: true, data: { entityId: id, components: data } };
+      const label = engine.getEntityLabel(id);
+      return { ok: true, data: { entityId: id, label: label ?? undefined, components: data } };
     },
   );
 
@@ -314,6 +428,21 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
         intensity: { type: 'number', description: 'Light intensity multiplier' },
         ambient: { type: 'array', description: 'Ambient color [r, g, b]', items: { type: 'number' } },
         envIntensity: { type: 'number', description: 'Environment/IBL intensity multiplier' },
+        shadowBias: { type: 'number', description: 'Shadow comparison bias for directional shadows' },
+        debugView: { type: 'string', description: 'Lighting debug view', enum: ['lit', 'normals', 'shadow', 'lightComplexity'] },
+        pointLights: {
+          type: 'array',
+          description: 'Point lights [{ position:[x,y,z], color:[r,g,b], intensity, range }]',
+          items: {
+            type: 'object',
+            properties: {
+              position: { type: 'array', items: { type: 'number' }, required: true },
+              color: { type: 'array', items: { type: 'number' }, required: true },
+              intensity: { type: 'number', required: true },
+              range: { type: 'number', required: true },
+            },
+          },
+        },
       },
     },
     (params) => {
@@ -323,6 +452,9 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
       if (params['intensity'] !== undefined) l.intensity = params['intensity'] as number;
       if (params['ambient']) l.ambient = params['ambient'] as [number, number, number];
       if (params['envIntensity'] !== undefined) l.envIntensity = params['envIntensity'] as number;
+      if (params['shadowBias'] !== undefined) l.shadowBias = params['shadowBias'] as number;
+      if (params['debugView'] !== undefined) l.debugView = params['debugView'] as any;
+      if (params['pointLights']) l.pointLights = params['pointLights'] as any;
       engine.lighting = l;
       return { ok: true, data: l };
     },

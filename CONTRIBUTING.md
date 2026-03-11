@@ -32,4 +32,4 @@ pnpm dev:editor
 
 ## Roadmap
 
-The project is developed in phases. If you are contributing a large feature, align it to the current roadmap phase in `README.md`.
+The project is developed in phases. If you are contributing a large feature, align it to the current roadmap phase in `README.md`. Phases 0–8 are complete; the engine includes procedural world generation, particle effects, and AI command APIs.

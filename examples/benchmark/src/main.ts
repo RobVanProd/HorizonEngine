@@ -188,7 +188,7 @@ function spawnEntities(world: World): { rootIds: number[]; childIds: number[] } 
     const s = 0.3 + Math.random() * 0.5;
 
     const root = world.spawn()
-      .add(LocalTransform, { px: x, py: y, pz: z, rotY: 0, scaleX: s, scaleY: s, scaleZ: s })
+      .add(LocalTransform, { px: x, py: y, pz: z, rotX: 0, rotY: 0, rotZ: 0, scaleX: s, scaleY: s, scaleZ: s })
       .add(WorldMatrix)
       .add(Velocity, { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 4 })
       .add(RotationSpeed, { speed: (Math.random() - 0.5) * 3 })
@@ -215,7 +215,7 @@ function spawnEntities(world: World): { rootIds: number[]; childIds: number[] } 
           px: Math.cos(childAngle) * offset,
           py: 0.5 + Math.random() * 0.5,
           pz: Math.sin(childAngle) * offset,
-          rotY: 0, scaleX: cs, scaleY: cs, scaleZ: cs,
+          rotX: 0, rotY: 0, rotZ: 0, scaleX: cs, scaleY: cs, scaleZ: cs,
         })
         .add(WorldMatrix)
         .add(Parent, { entity: root })

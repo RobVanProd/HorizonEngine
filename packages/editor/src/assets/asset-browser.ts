@@ -37,6 +37,7 @@ export class AssetBrowser {
   readonly root: HTMLDivElement;
   private _engine: Engine;
   private _assets: AssetEntry[] = [];
+  private _catalogAssets = new Map<string, AssetEntry>();
   private _filter = '';
   private _filterType: AssetType | 'all' = 'all';
   private _searchInput: HTMLInputElement;
@@ -133,8 +134,8 @@ export class AssetBrowser {
   onDrop(cb: (files: FileList) => void): void { this._onDrop = cb; }
 
   addAsset(entry: AssetEntry): void {
-    this._assets.push(entry);
-    this._renderGrid();
+    this._catalogAssets.set(entry.id, entry);
+    this.refresh();
   }
 
   refresh(): void {
@@ -142,29 +143,35 @@ export class AssetBrowser {
   }
 
   private _populateFromEngine(): void {
-    this._assets = [];
+    const assets: AssetEntry[] = [];
 
     // Meshes
     for (const [handle, mesh] of this._engine.meshes) {
-      this._assets.push({
+      assets.push({
         id: `mesh-${handle}`, name: `Mesh #${handle}`, type: 'mesh', handle,
       });
     }
 
     // Materials
     for (const [handle] of this._engine.materials) {
-      this._assets.push({
+      assets.push({
         id: `mat-${handle}`, name: `Material #${handle}`, type: 'material', handle,
       });
     }
 
     // Audio clips
     for (const [handle] of this._engine.audioClips) {
-      this._assets.push({
+      assets.push({
         id: `audio-${handle}`, name: `Audio #${handle}`, type: 'audio', handle,
       });
     }
 
+    for (const asset of this._catalogAssets.values()) {
+      if (!assets.some((existing) => existing.id === asset.id)) {
+        assets.push(asset);
+      }
+    }
+    this._assets = assets;
     this._renderGrid();
   }
 

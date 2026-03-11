@@ -52,6 +52,13 @@ export class DebugSystem {
       this._perfPanel.setGpuTimings(gpuProfiler.results);
     }
 
+    this._perfPanel.setSceneStats({
+      entities: this._engine.world.entityCount,
+      archetypes: this._engine.world.archetypeCount,
+      meshes: this._engine.meshes.size,
+      materials: this._engine.materials.size,
+      audio: this._engine.audioClips.size,
+    });
     this._perfPanel.update();
   }
 

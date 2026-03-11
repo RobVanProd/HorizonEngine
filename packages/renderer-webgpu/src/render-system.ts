@@ -28,6 +28,7 @@ export interface RenderSystemContext {
 }
 
 const _mat = new Float32Array(16);
+const _planes = new Float32Array(24);
 const WM_FIELDS = [
   'm0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7',
   'm8', 'm9', 'm10', 'm11', 'm12', 'm13', 'm14', 'm15',
@@ -48,6 +49,7 @@ export function createRenderSystem(
     ctx.renderer.setCamera(cam.vp, cam.eye);
     ctx.renderer.setLighting(ctx.getLighting());
     ctx.renderer.beginFrame();
+    extractFrustumPlanes(cam.vp, _planes);
 
     query.each((arch, count) => {
       const meshHandles = arch.getColumn(MeshRef, 'handle');
@@ -63,6 +65,10 @@ export function createRenderSystem(
         if (!mesh || !mat) continue;
 
         for (let c = 0; c < 16; c++) _mat[c] = wmCols[c]![i]!;
+        if (!isMeshVisible(_mat, mesh.boundsMin, mesh.boundsMax, mesh.boundsRadius, _planes)) {
+          ctx.renderer.recordCulledMesh(mesh);
+          continue;
+        }
 
         if (hasSkelRef && mesh.skinned && ctx.getSkinMatrices) {
           const jointMatrices = ctx.getSkinMatrices(entityIds[i]!);
@@ -80,4 +86,50 @@ export function createRenderSystem(
   }
 
   return { query, render };
+}
+
+function isMeshVisible(
+  model: Float32Array,
+  boundsMin: [number, number, number],
+  boundsMax: [number, number, number],
+  radius: number,
+  planes: Float32Array,
+): boolean {
+  const lx = (boundsMin[0] + boundsMax[0]) * 0.5;
+  const ly = (boundsMin[1] + boundsMax[1]) * 0.5;
+  const lz = (boundsMin[2] + boundsMax[2]) * 0.5;
+  const cx = model[0]! * lx + model[4]! * ly + model[8]! * lz + model[12]!;
+  const cy = model[1]! * lx + model[5]! * ly + model[9]! * lz + model[13]!;
+  const cz = model[2]! * lx + model[6]! * ly + model[10]! * lz + model[14]!;
+  const sx = Math.hypot(model[0]!, model[1]!, model[2]!);
+  const sy = Math.hypot(model[4]!, model[5]!, model[6]!);
+  const sz = Math.hypot(model[8]!, model[9]!, model[10]!);
+  const scaledRadius = radius * Math.max(sx, sy, sz, 1);
+  for (let i = 0; i < 6; i++) {
+    const offset = i * 4;
+    const distance =
+      planes[offset]! * cx +
+      planes[offset + 1]! * cy +
+      planes[offset + 2]! * cz +
+      planes[offset + 3]!;
+    if (distance < -scaledRadius) return false;
+  }
+  return true;
+}
+
+function extractFrustumPlanes(vp: Float32Array, out: Float32Array): void {
+  setPlane(out, 0, vp[3]! + vp[0]!, vp[7]! + vp[4]!, vp[11]! + vp[8]!, vp[15]! + vp[12]!);
+  setPlane(out, 4, vp[3]! - vp[0]!, vp[7]! - vp[4]!, vp[11]! - vp[8]!, vp[15]! - vp[12]!);
+  setPlane(out, 8, vp[3]! + vp[1]!, vp[7]! + vp[5]!, vp[11]! + vp[9]!, vp[15]! + vp[13]!);
+  setPlane(out, 12, vp[3]! - vp[1]!, vp[7]! - vp[5]!, vp[11]! - vp[9]!, vp[15]! - vp[13]!);
+  setPlane(out, 16, vp[3]! + vp[2]!, vp[7]! + vp[6]!, vp[11]! + vp[10]!, vp[15]! + vp[14]!);
+  setPlane(out, 20, vp[3]! - vp[2]!, vp[7]! - vp[6]!, vp[11]! - vp[10]!, vp[15]! - vp[14]!);
+}
+
+function setPlane(out: Float32Array, offset: number, a: number, b: number, c: number, d: number): void {
+  const len = Math.hypot(a, b, c) || 1;
+  out[offset] = a / len;
+  out[offset + 1] = b / len;
+  out[offset + 2] = c / len;
+  out[offset + 3] = d / len;
 }

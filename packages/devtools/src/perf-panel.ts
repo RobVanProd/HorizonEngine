@@ -22,6 +22,7 @@ export class PerfPanel {
   private _frameMetrics: FrameMetrics | null = null;
   private _gpuProfiler: GpuProfiler | null = null;
   private _gpuTimings: Map<string, number> = new Map();
+  private _sceneStats: Record<string, string | number> = {};
 
   constructor() {
     this._root = document.createElement('div');
@@ -68,6 +69,10 @@ export class PerfPanel {
     this._gpuTimings = timings;
   }
 
+  setSceneStats(stats: Record<string, string | number>): void {
+    this._sceneStats = stats;
+  }
+
   get visible(): boolean { return this._visible; }
 
   show(): void {
@@ -92,6 +97,7 @@ export class PerfPanel {
     this._updateCpuTimings();
     this._updateGpuTimings();
     this._updateMemory();
+    this._updateSceneStats();
   }
 
   destroy(): void {
@@ -185,6 +191,19 @@ export class PerfPanel {
       `<div style="display:flex;justify-content:space-between">` +
       `<span style="color:#ccc">JS Heap</span>` +
       `<span style="color:#88aaff">${used}/${total} MB</span></div>`;
+  }
+
+  private _updateSceneStats(): void {
+    if (Object.keys(this._sceneStats).length === 0) return;
+    const lines: string[] = ['<div style="margin-top:4px;color:#aaa;font-size:10px">Scene Stats</div>'];
+    for (const [label, value] of Object.entries(this._sceneStats)) {
+      lines.push(
+        `<div style="display:flex;justify-content:space-between">` +
+        `<span style="color:#ccc">${escHtml(label)}</span>` +
+        `<span style="color:#b8d0ff">${escHtml(String(value))}</span></div>`,
+      );
+    }
+    this._memSection.innerHTML += lines.join('');
   }
 }
 

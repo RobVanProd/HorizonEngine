@@ -26,11 +26,21 @@ import pbrSkinnedShaderSource from './shaders/pbr-skinned.wgsl?raw';
 import skyboxShaderSource from './shaders/skybox.wgsl?raw';
 
 const CAMERA_BUFFER_SIZE = 160;
-const LIGHT_BUFFER_SIZE = 128;
+const LIGHT_BUFFER_SIZE = 256;
 const OBJECT_BUFFER_SIZE = 128;
 const MAX_OBJECTS = 1024;
 const MAX_JOINTS = 256;
 const JOINT_BUFFER_SIZE = MAX_JOINTS * 64; // 256 * mat4x4f
+const MAX_POINT_LIGHTS = 4;
+
+export type LightingDebugView = 'lit' | 'normals' | 'shadow' | 'lightComplexity';
+
+export interface PointLight {
+  position: [number, number, number];
+  color: [number, number, number];
+  intensity: number;
+  range: number;
+}
 
 export interface SceneLighting {
   direction: [number, number, number];
@@ -38,6 +48,17 @@ export interface SceneLighting {
   intensity: number;
   ambient: [number, number, number];
   envIntensity: number;
+  pointLights?: PointLight[];
+  shadowBias?: number;
+  debugView?: LightingDebugView;
+}
+
+export interface GeometryFrameStats {
+  drawCount: number;
+  triangleCount: number;
+  meshletCount: number;
+  culledObjects: number;
+  culledTriangles: number;
 }
 
 interface DrawEntry {
@@ -73,6 +94,13 @@ export class PBRRenderer {
   private _skinnedObjectBindGroups: GPUBindGroup[] = [];
 
   private _draws: DrawEntry[] = [];
+  private _frameStats: GeometryFrameStats = {
+    drawCount: 0,
+    triangleCount: 0,
+    meshletCount: 0,
+    culledObjects: 0,
+    culledTriangles: 0,
+  };
   private _initialized = false;
   private _gpuProfiler: GpuProfiler | null = null;
   private _profilingEnabled = false;
@@ -86,6 +114,7 @@ export class PBRRenderer {
   get environment(): Environment | null { return this._environment; }
   get shadowMap(): ShadowMap | null { return this._shadowMap; }
   get gpuProfiler(): GpuProfiler | null { return this._gpuProfiler; }
+  get frameStats(): GeometryFrameStats { return this._frameStats; }
 
   /** Enable GPU timestamp profiling (requires 'timestamp-query' device feature). */
   enableProfiling(): void {
@@ -282,7 +311,7 @@ export class PBRRenderer {
   }
 
   setLighting(lighting: SceneLighting): void {
-    const d = new Float32Array(32);
+    const d = new Float32Array(64);
     const dx = lighting.direction[0], dy = lighting.direction[1], dz = lighting.direction[2];
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
     d[0] = dx / len; d[1] = dy / len; d[2] = dz / len; d[3] = 0;
@@ -296,12 +325,35 @@ export class PBRRenderer {
     }
     d[28] = lighting.envIntensity;
     d[29] = this._environment?.maxMipLevel ?? 4;
+    d[30] = lighting.shadowBias ?? 0.003;
+    d[31] = debugViewToIndex(lighting.debugView);
+    const pointLights = (lighting.pointLights ?? []).slice(0, MAX_POINT_LIGHTS);
+    for (let i = 0; i < pointLights.length; i++) {
+      const light = pointLights[i]!;
+      const posOffset = 32 + i * 4;
+      const colorOffset = 48 + i * 4;
+      d[posOffset] = light.position[0];
+      d[posOffset + 1] = light.position[1];
+      d[posOffset + 2] = light.position[2];
+      d[posOffset + 3] = light.range;
+      d[colorOffset] = light.color[0];
+      d[colorOffset + 1] = light.color[1];
+      d[colorOffset + 2] = light.color[2];
+      d[colorOffset + 3] = light.intensity;
+    }
     this._gpu.device.queue.writeBuffer(this._lightBuffer, 0, d as Float32Array<ArrayBuffer>);
   }
 
   beginFrame(): void {
     this._ensureDepthSize();
     this._draws.length = 0;
+    this._frameStats = {
+      drawCount: 0,
+      triangleCount: 0,
+      meshletCount: 0,
+      culledObjects: 0,
+      culledTriangles: 0,
+    };
     if (this._profilingEnabled && this._gpuProfiler) {
       this._gpuProfiler.beginFrame();
     }
@@ -310,6 +362,9 @@ export class PBRRenderer {
   drawMesh(mesh: GPUMesh, material: PBRMaterial, modelMatrix: Float32Array): void {
     if (this._draws.length >= MAX_OBJECTS) return;
     this._draws.push({ mesh, material, modelMatrix, skinned: false });
+    this._frameStats.drawCount++;
+    this._frameStats.triangleCount += mesh.triangleCount;
+    this._frameStats.meshletCount += mesh.meshletCount;
 
     const idx = this._draws.length - 1;
     const data = new Float32Array(32);
@@ -328,6 +383,9 @@ export class PBRRenderer {
   ): void {
     if (this._draws.length >= MAX_OBJECTS) return;
     this._draws.push({ mesh, material, modelMatrix, skinned: true });
+    this._frameStats.drawCount++;
+    this._frameStats.triangleCount += mesh.triangleCount;
+    this._frameStats.meshletCount += mesh.meshletCount;
 
     const idx = this._draws.length - 1;
     const data = new Float32Array(32);
@@ -339,6 +397,11 @@ export class PBRRenderer {
       this._jointBuffers[idx]!, 0,
       jointMatrices.buffer as ArrayBuffer, jointMatrices.byteOffset, len * 4,
     );
+  }
+
+  recordCulledMesh(mesh: GPUMesh): void {
+    this._frameStats.culledObjects++;
+    this._frameStats.culledTriangles += mesh.triangleCount;
   }
 
   endFrame(afterMainPass?: (pass: GPURenderPassEncoder) => void): void {
@@ -473,4 +536,15 @@ function computeNormalMatrix(m: Float32Array, out: Float32Array, offset: number)
   out[offset+8]=(a31*b05-a32*b04+a33*b03)*id; out[offset+9]=(a32*b02-a30*b05-a33*b01)*id;
   out[offset+10]=(a30*b04-a31*b02+a33*b00)*id; out[offset+11]=0;
   out[offset+12]=0; out[offset+13]=0; out[offset+14]=0; out[offset+15]=1;
+}
+
+function debugViewToIndex(view: LightingDebugView | undefined): number {
+  switch (view) {
+    case 'normals': return 1;
+    case 'shadow': return 2;
+    case 'lightComplexity': return 3;
+    case 'lit':
+    default:
+      return 0;
+  }
 }

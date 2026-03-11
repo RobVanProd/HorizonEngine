@@ -15,6 +15,7 @@
     "clean": "rm -rf packages/*/dist examples/*/dist"
   },
   "devDependencies": {
+    "@types/three": "^0.183.1",
     "@webgpu/types": "^0.1.61",
     "typescript": "^5.7.3",
     "vite": "^6.2.0",
