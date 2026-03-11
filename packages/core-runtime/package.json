@@ -1,0 +1,19 @@
+{
+  "name": "@engine/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@engine/ecs": "workspace:*",
+    "@engine/memory": "workspace:*",
+    "@engine/platform": "workspace:*",
+    "@engine/profiler": "workspace:*",
+    "@engine/renderer-webgpu": "workspace:*",
+    "@engine/scheduler": "workspace:*"
+  }
+}

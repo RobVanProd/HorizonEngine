@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@engine/memory": ["./packages/memory/src"],
+      "@engine/ecs": ["./packages/ecs/src"],
+      "@engine/platform": ["./packages/platform/src"],
+      "@engine/scheduler": ["./packages/scheduler/src"],
+      "@engine/profiler": ["./packages/profiler/src"],
+      "@engine/renderer-webgpu": ["./packages/renderer-webgpu/src"],
+      "@engine/core": ["./packages/core-runtime/src"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "examples/*/src/**/*.ts"
+  ]
+}
