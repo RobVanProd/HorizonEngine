@@ -24,6 +24,8 @@ import { GpuProfiler } from '@engine/profiler';
 import pbrShaderSource from './shaders/pbr.wgsl?raw';
 import pbrSkinnedShaderSource from './shaders/pbr-skinned.wgsl?raw';
 import skyboxShaderSource from './shaders/skybox.wgsl?raw';
+import waterShaderSource from './shaders/water.wgsl?raw';
+import { WaterMaterial } from './water-material.js';
 
 const CAMERA_BUFFER_SIZE = 160;
 const LIGHT_BUFFER_SIZE = 256;
@@ -68,6 +70,12 @@ interface DrawEntry {
   skinned: boolean;
 }
 
+interface WaterDrawEntry {
+  mesh: GPUMesh;
+  material: WaterMaterial;
+  modelMatrix: Float32Array;
+}
+
 export class PBRRenderer {
   private _gpu: GPUContext;
   private _pipeline!: GPURenderPipeline;
@@ -94,6 +102,12 @@ export class PBRRenderer {
   private _skinnedObjectBindGroups: GPUBindGroup[] = [];
 
   private _draws: DrawEntry[] = [];
+  private _waterDraws: WaterDrawEntry[] = [];
+  private _waterPipeline!: GPURenderPipeline;
+  private _waterLightBindGroup!: GPUBindGroup;
+  private _waterObjectBuffers: GPUBuffer[] = [];
+  private _waterObjectBindGroups: GPUBindGroup[] = [];
+  private _waterMaterialLayout!: GPUBindGroupLayout;
   private _frameStats: GeometryFrameStats = {
     drawCount: 0,
     triangleCount: 0,
@@ -110,6 +124,7 @@ export class PBRRenderer {
   }
 
   get materialLayout(): GPUBindGroupLayout { return this._materialLayout; }
+  get waterMaterialLayout(): GPUBindGroupLayout { return this._waterMaterialLayout; }
   get device(): GPUDevice { return this._gpu.device; }
   get environment(): Environment | null { return this._environment; }
   get shadowMap(): ShadowMap | null { return this._shadowMap; }
@@ -292,12 +307,95 @@ export class PBRRenderer {
       }));
     }
 
+    // Water pipeline
+    const waterLightLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: 'cube' } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      ],
+    });
+    this._waterMaterialLayout = device.createBindGroupLayout({
+      entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
+    });
+    this._waterLightBindGroup = device.createBindGroup({
+      layout: waterLightLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this._lightBuffer } },
+        { binding: 1, resource: this._environment.prefilteredView },
+        { binding: 2, resource: this._environment.sampler },
+      ],
+    });
+    for (let i = 0; i < MAX_OBJECTS; i++) {
+      const buf = device.createBuffer({ size: OBJECT_BUFFER_SIZE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      this._waterObjectBuffers.push(buf);
+      this._waterObjectBindGroups.push(device.createBindGroup({
+        layout: objectLayout,
+        entries: [{ binding: 0, resource: { buffer: buf } }],
+      }));
+    }
+    const waterModule = device.createShaderModule({ code: waterShaderSource });
+    this._waterPipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [cameraLayout, waterLightLayout, this._waterMaterialLayout, objectLayout],
+      }),
+      vertex: { module: waterModule, entryPoint: 'vs_main', buffers: [PBR_VERTEX_LAYOUT] },
+      fragment: {
+        module: waterModule,
+        entryPoint: 'fs_main',
+        targets: [{
+          format,
+          blend: {
+            color: {
+              srcFactor: 'src-alpha',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' },
+    });
+
     this._initialized = true;
-    console.log('[PBR] Pipeline ready: IBL + shadows + skybox + skinning');
+    console.log('[PBR] Pipeline ready: IBL + shadows + skybox + water + skinning');
   }
 
   createMaterial(params?: PBRMaterialParams): PBRMaterial {
     return new PBRMaterial(this._gpu.device, this._materialLayout, params);
+  }
+
+  createWaterMaterial(params?: {
+    waveScale?: number;
+    waveStrength?: number;
+    waveSpeed?: number;
+    shallowColor?: [number, number, number];
+    deepColor?: [number, number, number];
+    foamColor?: [number, number, number];
+    edgeFade?: number;
+    clarity?: number;
+    foamAmount?: number;
+  }): WaterMaterial {
+    return new WaterMaterial(this._gpu.device, this._waterMaterialLayout, params);
+  }
+
+  drawWaterMesh(mesh: GPUMesh, material: WaterMaterial, modelMatrix: Float32Array): void {
+    if (this._waterDraws.length >= MAX_OBJECTS) return;
+    this._waterDraws.push({ mesh, material, modelMatrix });
+    this._frameStats.drawCount++;
+    this._frameStats.triangleCount += mesh.triangleCount;
+
+    const idx = this._waterDraws.length - 1;
+    const data = new Float32Array(32);
+    data.set(modelMatrix, 0);
+    computeNormalMatrix(modelMatrix, data, 16);
+    this._gpu.device.queue.writeBuffer(this._waterObjectBuffers[idx]!, 0, data as Float32Array<ArrayBuffer>);
   }
 
   setCamera(viewProjection: Float32Array, position: [number, number, number]): void {
@@ -347,6 +445,7 @@ export class PBRRenderer {
   beginFrame(): void {
     this._ensureDepthSize();
     this._draws.length = 0;
+    this._waterDraws.length = 0;
     this._frameStats = {
       drawCount: 0,
       triangleCount: 0,
@@ -471,6 +570,21 @@ export class PBRRenderer {
       pass.drawIndexed(dc.mesh.indexCount);
     }
 
+    // Water (animated waves, Fresnel reflection)
+    const waterTime = typeof performance !== 'undefined' ? performance.now() * 0.001 : 0;
+    for (let i = 0; i < this._waterDraws.length; i++) {
+      const wd = this._waterDraws[i]!;
+      wd.material.upload(waterTime);
+      pass.setPipeline(this._waterPipeline);
+      pass.setBindGroup(0, this._cameraBindGroup);
+      pass.setBindGroup(1, this._waterLightBindGroup);
+      pass.setBindGroup(2, wd.material.bindGroup);
+      pass.setBindGroup(3, this._waterObjectBindGroups[i]!);
+      pass.setVertexBuffer(0, wd.mesh.vertexBuffer);
+      pass.setIndexBuffer(wd.mesh.indexBuffer, 'uint32');
+      pass.drawIndexed(wd.mesh.indexCount);
+    }
+
     afterMainPass?.(pass);
     pass.end();
 
@@ -496,6 +610,7 @@ export class PBRRenderer {
     this._shadowMap?.destroy();
     for (const b of this._objectBuffers) b.destroy();
     for (const b of this._jointBuffers) b.destroy();
+    for (const b of this._waterObjectBuffers) b.destroy();
   }
 
   private _createDepthTexture(): void {

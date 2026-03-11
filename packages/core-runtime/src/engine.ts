@@ -9,6 +9,7 @@ import {
   type GPUMesh,
   type PBRMaterial,
   type PBRMaterialParams,
+  type WaterMaterial,
   createRenderSystem,
   type RenderSystemContext,
 } from '@engine/renderer-webgpu';
@@ -45,6 +46,8 @@ export class Engine {
   readonly meshes = new Map<number, GPUMesh>();
   /** Material handle registry — maps numeric handles to PBRMaterial instances. */
   readonly materials = new Map<number, PBRMaterial>();
+  /** Water material registry — maps handles to WaterMaterial instances. */
+  readonly waterMaterials = new Map<number, WaterMaterial>();
   /** Audio clip registry — maps numeric handles to AudioEngine buffer handles. */
   readonly audioClips = new Map<number, AudioHandle>();
   /** Human-readable scene labels for hierarchy and tooling surfaces. */
@@ -148,6 +151,24 @@ export class Engine {
     return { handle, material: mat };
   }
 
+  /** Create a water material and register it. Returns handle for WaterRef. */
+  createWaterMaterial(params?: {
+    waveScale?: number;
+    waveStrength?: number;
+    waveSpeed?: number;
+    shallowColor?: [number, number, number];
+    deepColor?: [number, number, number];
+    foamColor?: [number, number, number];
+    edgeFade?: number;
+    clarity?: number;
+    foamAmount?: number;
+  }): { handle: number; material: WaterMaterial } {
+    const mat = this.pbrRenderer.createWaterMaterial(params);
+    const handle = this._nextHandle++;
+    this.waterMaterials.set(handle, mat);
+    return { handle, material: mat };
+  }
+
   /** Register an audio clip handle and return an engine handle for use with AudioSource components. */
   registerAudioClip(audioHandle: AudioHandle): number {
     const h = this._nextHandle++;
@@ -193,7 +214,7 @@ export class Engine {
 
       const rsCtx: RenderSystemContext = {
         renderer: this._pbrRenderer,
-        registries: { meshes: this.meshes, materials: this.materials },
+        registries: { meshes: this.meshes, materials: this.materials, waterMaterials: this.waterMaterials },
         getCamera: () => ({ vp: this._cameraVP, eye: this._cameraEye }),
         getLighting: () => this._lighting,
       };

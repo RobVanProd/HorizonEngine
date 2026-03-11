@@ -1,6 +1,6 @@
 import type { Engine } from '@engine/core';
-import { LocalTransform, MaterialRef, MeshRef, Visible, WorldMatrix } from '@engine/ecs';
-import { GPUMesh } from '@engine/renderer-webgpu';
+import { LocalTransform, MaterialRef, MeshRef, Visible, WaterRef, WorldMatrix } from '@engine/ecs';
+import { GPUMesh, createPlane, type WaterMaterialParams } from '@engine/renderer-webgpu';
 import {
   BiomeRegion,
   ChunkCoord,
@@ -39,6 +39,12 @@ interface ScatterRecord {
   instances: ScatterInstance[];
 }
 
+export interface ChunkRecord {
+  terrainEntityId: number;
+  waterEntityId?: number;
+  scatterEntityIds: number[];
+}
+
 export interface RegionSample {
   averageHeight: number;
   averageSlope: number;
@@ -49,6 +55,24 @@ export interface RegionSample {
 export interface TerrainSpawnOptions extends TerrainGenerationOptions {
   materialHandle?: number;
   stableAssetId?: number;
+  /** UV scale for texture tiling. Texture repeats every (cellSize * uvScale) units. Default 4. */
+  uvScale?: number;
+  /** UV offset [u, v] to break grid alignment. Default [0.37, 0.61]. */
+  uvOffset?: [number, number];
+  /** UV rotation in radians to break visible tiling. Default ~0.4 (~23°). */
+  uvRotation?: number;
+  /** Multiplier for auto-spawned water plane width. Default 1.2. */
+  waterScaleX?: number;
+  /** Multiplier for auto-spawned water plane depth. Default 1.2. */
+  waterScaleZ?: number;
+  /** World-space offset for water center X. */
+  waterOffsetX?: number;
+  /** World-space offset for water center Z. */
+  waterOffsetZ?: number;
+  /** Subdivision count for the auto water plane mesh. Default 32. */
+  waterSegments?: number;
+  /** Optional water material override for color/foam/wave tuning. */
+  waterMaterial?: WaterMaterialParams;
 }
 
 export interface SplineSpawnOptions extends CreateSplineOptions {
@@ -62,21 +86,31 @@ export interface ScatterSpawnOptions extends ScatterOptions {
   stableAssetId?: number;
 }
 
+function chunkKey(cx: number, cz: number): string {
+  return `${cx},${cz}`;
+}
+
 export class WorldRegistry {
   readonly terrains = new Map<number, TerrainRecord>();
   readonly splines = new Map<number, SplinePoint[]>();
   readonly scatters = new Map<number, ScatterRecord>();
+  readonly chunkRecords = new Map<string, ChunkRecord>();
 
   constructor(readonly engine: Engine) {}
 
   spawnTerrain(options: TerrainSpawnOptions): {
     entityId: number;
+    waterEntityId?: number;
     meshHandle: number;
     materialHandle: number;
     heightfield: Heightfield;
   } {
     const heightfield = generateHeightfield(options);
-    const meshData = buildTerrainMeshData(heightfield);
+    const meshData = buildTerrainMeshData(heightfield, {
+      uvScale: options.uvScale ?? 4,
+      uvOffset: options.uvOffset,
+      uvRotation: options.uvRotation,
+    });
     const meshHandle = this.engine.registerMesh(GPUMesh.create(this.engine.gpu.device, meshData));
     const materialHandle = options.materialHandle ?? this.engine.createMaterial({
       albedo: [0.28, 0.36, 0.24, 1],
@@ -126,7 +160,58 @@ export class WorldRegistry {
     }
 
     this.terrains.set(entity.id, { heightfield, meshHandle, materialHandle });
-    return { entityId: entity.id, meshHandle, materialHandle, heightfield };
+
+    let waterEntityId: number | undefined;
+    if (options.waterThreshold != null && options.waterThreshold > 0 && options.waterThreshold < 1) {
+      const range = heightfield.maxHeight - heightfield.minHeight;
+      const waterY = heightfield.minHeight + range * options.waterThreshold;
+      const terrainW = (heightfield.width - 1) * (options.cellSize ?? 2);
+      const terrainD = (heightfield.depth - 1) * (options.cellSize ?? 2);
+      const waterScaleX = options.waterScaleX ?? 1.2;
+      const waterScaleZ = options.waterScaleZ ?? 1.2;
+      const waterSegments = options.waterSegments ?? 32;
+      const waterMesh = GPUMesh.create(
+        this.engine.gpu.device,
+        createPlane(terrainW * waterScaleX, terrainD * waterScaleZ, waterSegments, waterSegments),
+      );
+      const waterMeshHandle = this.engine.registerMesh(waterMesh);
+      const { handle: waterMatHandle } = this.engine.createWaterMaterial({
+        waveScale: 0.08,
+        waveStrength: 1.0,
+        ...options.waterMaterial,
+      });
+      const waterEntity = this.engine.world.spawn();
+      waterEntityId = waterEntity.id;
+      const centerX = (options.originX ?? 0) + terrainW * 0.5 + (options.waterOffsetX ?? 0);
+      const centerZ = (options.originZ ?? 0) + terrainD * 0.5 + (options.waterOffsetZ ?? 0);
+      waterEntity.add(LocalTransform, {
+        px: centerX, py: waterY, pz: centerZ,
+        rotX: 0, rotY: 0, rotZ: 0,
+        scaleX: 1, scaleY: 1, scaleZ: 1,
+      });
+      waterEntity.add(WorldMatrix, identityWorldMatrix());
+      waterEntity.add(MeshRef, { handle: waterMeshHandle });
+      waterEntity.add(WaterRef, { handle: waterMatHandle });
+      waterEntity.add(Visible, { _tag: 1 });
+      this.engine.setEntityLabel(waterEntity.id, 'Water Plane');
+    }
+
+    return { entityId: entity.id, waterEntityId, meshHandle, materialHandle, heightfield };
+  }
+
+  /** Destroy all entities for a chunk. Call when deactivating a streamed chunk. */
+  destroyChunk(cx: number, cz: number): void {
+    const key = chunkKey(cx, cz);
+    const record = this.chunkRecords.get(key);
+    if (!record) return;
+    const world = this.engine.world;
+    this.terrains.delete(record.terrainEntityId);
+    if (world.has(record.terrainEntityId)) world.destroy(record.terrainEntityId);
+    if (record.waterEntityId != null && world.has(record.waterEntityId)) world.destroy(record.waterEntityId);
+    for (const id of record.scatterEntityIds) {
+      if (world.has(id)) world.destroy(id);
+    }
+    this.chunkRecords.delete(key);
   }
 
   registerTerrainEntity(entityId: number, heightfield: Heightfield, meshHandle: number, materialHandle: number): void {
@@ -222,6 +307,20 @@ export class WorldRegistry {
       instances,
     });
     return { scatterEntityId: scatterRoot.id, instanceCount: instances.length };
+  }
+
+  /** Sample ground height at (x,z) from any loaded terrain that contains the point. */
+  sampleGroundHeight(x: number, z: number): number {
+    for (const [, rec] of this.terrains) {
+      const f = rec.heightfield;
+      const w = (f.width - 1) * f.cellSize;
+      const d = (f.depth - 1) * f.cellSize;
+      if (x >= f.originX && x <= f.originX + w && z >= f.originZ && z <= f.originZ + d) {
+        const h = sampleHeightWorld(f, x, z);
+        return Number.isFinite(h) ? h : f.minHeight;
+      }
+    }
+    return 0;
   }
 
   sampleRegion(terrainEntityId: number, x: number, z: number, radius: number): RegionSample {

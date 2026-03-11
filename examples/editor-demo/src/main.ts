@@ -45,7 +45,7 @@ import {
 } from '@engine/world';
 import { userPackBaseUrl, userPackEntries } from 'virtual:user-pack-manifest';
 import { naturePackBaseUrl, naturePackEntries } from 'virtual:nature-pack-manifest';
-import { GameDemo, createGameHud } from './game-demo.js';
+import { GameDemo, createGameHud, type GameQuestAnchors } from './game-demo.js';
 
 const BOOT_VIDEO_URL = new URL('../../../horizon_loader_blender.mp4', import.meta.url).href;
 const FIRST_LEVEL_ID = 'first-nature-expedition';
@@ -58,6 +58,7 @@ interface DemoLevelResult {
   name: string;
   bounds: SceneBounds;
   collectibleRoute?: Array<[number, number, number]>;
+  questAnchors?: Partial<GameQuestAnchors>;
 }
 
 interface DemoLevelDefinition {
@@ -127,8 +128,10 @@ async function main() {
   const gameDemo = new GameDemo(engine);
   gameDemo.spawn({
     bounds: sceneBounds,
+    levelName: level.name,
     groundSampler: (x, z) => registry.sampleGroundHeight(x, z),
     interestPoints: level.collectibleRoute,
+    questAnchors: level.questAnchors,
   });
 
   const gameHud = createGameHud();
@@ -340,6 +343,18 @@ function buildFirstLevelCollectibleRoute(trail: SplinePoint[], clearings: Layout
   return route;
 }
 
+function buildFirstLevelQuestAnchors(trail: SplinePoint[], clearings: LayoutCircle[]): GameQuestAnchors {
+  const samples = sampleSplinePolyline(trail, 16);
+  const pick = (index: number) => samples[Math.min(samples.length - 1, Math.max(0, index))]!;
+  return {
+    trailhead: [pick(0).position[0], 0, pick(0).position[2]],
+    camp: [clearings[0]!.centerX, 0, clearings[0]!.centerZ],
+    shrine: [clearings[1]!.centerX, 0, clearings[1]!.centerZ],
+    spring: [clearings[2]!.centerX, 0, clearings[2]!.centerZ],
+    overlook: [pick(samples.length - 2).position[0], 0, pick(samples.length - 2).position[2]],
+  };
+}
+
 function shouldKeepTrailOpen(file: string): boolean {
   return !/Grass/i.test(file);
 }
@@ -353,11 +368,11 @@ async function loadNaturePackDemo(
   device: GPUDevice,
 ): Promise<DemoLevelResult | null> {
   engine.lighting = {
-    direction: [-0.35, -0.9, -0.2],
-    color: [1.0, 0.98, 0.95],
-    intensity: 4.4,
-    ambient: [0.04, 0.045, 0.05],
-    envIntensity: 1.1,
+    direction: [-0.28, -0.92, -0.24],
+    color: [1.0, 0.985, 0.96],
+    intensity: 4.9,
+    ambient: [0.055, 0.06, 0.07],
+    envIntensity: 1.2,
   };
 
   const registry = getWorldRegistry(engine);
@@ -368,18 +383,24 @@ async function loadNaturePackDemo(
   const firstLevelTrail = buildFirstLevelTrail(originX, originZ, terrainSize, FIRST_LEVEL_SEED);
   const firstLevelClearings = buildFirstLevelClearings(firstLevelTrail);
   const collectibleRoute = buildFirstLevelCollectibleRoute(firstLevelTrail, firstLevelClearings);
-
-  const PH = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock';
+  const questAnchors = buildFirstLevelQuestAnchors(firstLevelTrail, firstLevelClearings);
+  const terrainWidth = (100 - 1) * cellSize;
+  const terrainDepth = (100 - 1) * cellSize;
+  const terrainCenterX = originX + terrainWidth * 0.5;
+  const terrainCenterZ = originZ + terrainDepth * 0.5;
+  const grassDiffuseUrl = new URL('../../pbr-demo/public/textures/grass_diffuse.jpg', import.meta.url).href;
+  const grassNormalUrl = new URL('../../pbr-demo/public/textures/grass_normal.jpg', import.meta.url).href;
+  const grassRoughUrl = new URL('../../pbr-demo/public/textures/grass_rough.jpg', import.meta.url).href;
   let terrainMat: { handle: number };
   try {
     const [albedoTex, normalTex, roughTex] = await Promise.all([
-      loadTexture(device, `${PH}/aerial_grass_rock_diff_2k.jpg`, { sRGB: true }),
-      loadTexture(device, `${PH}/aerial_grass_rock_nor_gl_2k.jpg`),
-      loadTexture(device, `${PH}/aerial_grass_rock_rough_2k.jpg`),
+      loadTexture(device, grassDiffuseUrl, { sRGB: true }),
+      loadTexture(device, grassNormalUrl),
+      loadTexture(device, grassRoughUrl),
     ]);
     terrainMat = engine.createMaterial({
-      albedo: [0.9, 0.9, 0.9, 1],
-      roughness: 0.92,
+      albedo: [0.84, 0.92, 0.78, 1],
+      roughness: 0.88,
       metallic: 0,
       albedoTexture: albedoTex,
       normalTexture: normalTex,
@@ -401,13 +422,29 @@ async function loadNaturePackDemo(
     cellSize,
     originX,
     originZ,
-    baseHeight: 0,
-    heightScale: 16,
+    baseHeight: -0.25,
+    heightScale: 11,
     materialHandle: terrainMat.handle,
-    waterThreshold: 0.1,
+    waterThreshold: 0.14,
+    waterScaleX: 30 / terrainWidth,
+    waterScaleZ: 24 / terrainDepth,
+    waterOffsetX: questAnchors.spring[0] - terrainCenterX,
+    waterOffsetZ: questAnchors.spring[2] - terrainCenterZ,
+    waterSegments: 96,
+    waterMaterial: {
+      waveScale: 0.22,
+      waveStrength: 0.45,
+      waveSpeed: 0.7,
+      shallowColor: [0.19, 0.52, 0.46],
+      deepColor: [0.03, 0.18, 0.28],
+      foamColor: [0.86, 0.96, 0.98],
+      edgeFade: 0.22,
+      clarity: 0.88,
+      foamAmount: 0.72,
+    },
     roadSpline: firstLevelTrail,
-    roadWidth: FIRST_LEVEL_TRAIL_WIDTH,
-    uvScale: 8,
+    roadWidth: FIRST_LEVEL_TRAIL_WIDTH * 0.82,
+    uvScale: 10,
     uvOffset: [0.37, 0.61],
     uvRotation: 0.4,
   });
@@ -421,6 +458,10 @@ async function loadNaturePackDemo(
   const terrainRec = registry.terrains.get(terrainResult.entityId);
   if (!terrainRec) return null;
   const heightfield = terrainRec.heightfield;
+  for (const clearing of firstLevelClearings) {
+    registry.paintBiomeCircle(terrainResult.entityId, clearing.centerX, clearing.centerZ, clearing.radius + 5, BiomeId.Plains);
+  }
+  registry.paintBiomeCircle(terrainResult.entityId, questAnchors.spring[0], questAnchors.spring[2], 10, BiomeId.River);
 
   const occupancy = new OccupancyMap(heightfield.width, heightfield.depth);
 
@@ -487,6 +528,7 @@ async function loadNaturePackDemo(
     name: FIRST_LEVEL_NAME,
     bounds,
     collectibleRoute,
+    questAnchors,
   };
 }
 
