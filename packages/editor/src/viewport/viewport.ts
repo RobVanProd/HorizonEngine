@@ -223,7 +223,9 @@ export class Viewport {
     const y = e.clientY - rect.top;
     const axis = this._pickGizmoAxis(selectedId, x, y);
     const projected = this._projectEntity(selectedId);
-    const centerHit = projected ? Math.hypot(projected.x - x, projected.y - y) <= 56 : false;
+    const centerHit = this._gizmoMode !== 'rotate' && projected
+      ? Math.hypot(projected.x - x, projected.y - y) <= 56
+      : false;
     if (!axis && !centerHit) return;
 
     this._dragState = {
@@ -386,6 +388,10 @@ export class Viewport {
     const center = this._projectWorldPoint(px, py, pz);
     if (!center) return null;
 
+    if (this._gizmoMode === 'rotate') {
+      return this._pickRotateAxis(px, py, pz, gizmoScale, x, y);
+    }
+
     const handles: Array<{ axis: Exclude<GizmoAxis, 'xy' | 'xz' | 'yz' | null>; end: [number, number, number] }> = [
       { axis: 'x', end: [px + gizmoScale, py, pz] },
       { axis: 'y', end: [px, py + gizmoScale, pz] },
@@ -403,6 +409,35 @@ export class Viewport {
         bestAxis = handle.axis;
       }
     }
+    return bestAxis;
+  }
+
+  private _pickRotateAxis(px: number, py: number, pz: number, scale: number, x: number, y: number): GizmoAxis {
+    const segments = 48;
+    let bestDistance = 14;
+    let bestAxis: GizmoAxis = null;
+    let previous = this._projectWorldPoint(px + scale, py, pz);
+    if (!previous) return null;
+
+    for (let i = 1; i <= segments; i++) {
+      const t = (i / segments) * Math.PI * 2;
+      const current = this._projectWorldPoint(
+        px + Math.cos(t) * scale,
+        py,
+        pz + Math.sin(t) * scale,
+      );
+      if (!previous || !current) {
+        previous = current;
+        continue;
+      }
+      const distance = this._pointToSegmentDistance(x, y, previous.x, previous.y, current.x, current.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestAxis = 'y';
+      }
+      previous = current;
+    }
+
     return bestAxis;
   }
 

@@ -255,10 +255,9 @@ export class GizmoRenderer {
     const s = scale;
     const segs = 48;
 
+    // LocalTransform currently supports yaw only, so expose a single Y rotation ring.
     const ringAxes: Array<{ axis: GizmoAxis; genPoint: (t: number) => [number, number, number] }> = [
-      { axis: 'x', genPoint: (t) => [center[0], center[1] + Math.cos(t) * s, center[2] + Math.sin(t) * s] },
       { axis: 'y', genPoint: (t) => [center[0] + Math.cos(t) * s, center[1], center[2] + Math.sin(t) * s] },
-      { axis: 'z', genPoint: (t) => [center[0] + Math.cos(t) * s, center[1] + Math.sin(t) * s, center[2]] },
     ];
 
     for (const { axis, genPoint } of ringAxes) {
