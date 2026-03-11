@@ -24,11 +24,15 @@ export interface EnvironmentConfig {
   sunIntensity?: number;
   /** Provide HDR float RGB data to use a real environment map instead of procedural sky */
   hdrData?: { width: number; height: number; data: Float32Array };
+  /** Choose whether the visible skybox uses the environment probe or a procedural sky. */
+  backgroundSource?: 'environment' | 'procedural';
 }
 
 export class Environment {
   readonly envCubemap: GPUTexture;
   readonly envCubemapView: GPUTextureView;
+  readonly skyboxCubemap: GPUTexture;
+  readonly skyboxCubemapView: GPUTextureView;
   readonly prefilteredMap: GPUTexture;
   readonly prefilteredView: GPUTextureView;
   readonly irradianceMap: GPUTexture;
@@ -40,6 +44,7 @@ export class Environment {
 
   private constructor(
     envCubemap: GPUTexture,
+    skyboxCubemap: GPUTexture,
     prefilteredMap: GPUTexture,
     irradianceMap: GPUTexture,
     brdfLUT: GPUTexture,
@@ -48,6 +53,8 @@ export class Environment {
   ) {
     this.envCubemap = envCubemap;
     this.envCubemapView = envCubemap.createView({ dimension: 'cube' });
+    this.skyboxCubemap = skyboxCubemap;
+    this.skyboxCubemapView = skyboxCubemap.createView({ dimension: 'cube' });
     this.prefilteredMap = prefilteredMap;
     this.prefilteredView = prefilteredMap.createView({ dimension: 'cube' });
     this.irradianceMap = irradianceMap;
@@ -66,6 +73,7 @@ export class Environment {
     const brdfSamples = config.brdfSamples ?? 512;
     const sunDir = config.sunDirection ?? [0.5, 0.7, 0.3];
     const sunIntensity = config.sunIntensity ?? 40.0;
+    const backgroundSource = config.backgroundSource ?? (config.hdrData ? 'environment' : 'procedural');
 
     const mipLevels = 5;
 
@@ -98,6 +106,21 @@ export class Environment {
 
     // Generate source cubemap mipmaps (needed for filtered importance sampling in prefilter)
     await generateCubemapMipmaps(device, envCubemap, cubemapSize, mipLevels);
+
+    let skyboxCubemap = envCubemap;
+    if (config.hdrData && backgroundSource === 'procedural') {
+      skyboxCubemap = device.createTexture({
+        label: 'skybox-cubemap',
+        size: [cubemapSize, cubemapSize, 6],
+        format: 'rgba16float',
+        usage:
+          GPUTextureUsage.STORAGE_BINDING |
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_SRC,
+      });
+      await generateProceduralSky(device, skyboxCubemap, cubemapSize, sunDir, sunIntensity);
+      await verifyTexture(device, skyboxCubemap, cubemapSize, 'skyboxCubemap');
+    }
 
     // Step 2: Pre-filter specular cubemap
     const prefilteredMap = device.createTexture({
@@ -133,11 +156,12 @@ export class Environment {
     await computeBrdfLUT(device, brdfLUT, brdfLutSize, brdfSamples);
     await verifyTexture2D(device, brdfLUT, brdfLutSize, 'brdfLUT');
 
-    return new Environment(envCubemap, prefilteredMap, irradianceMap, brdfLUT, mipLevels - 1, sampler);
+    return new Environment(envCubemap, skyboxCubemap, prefilteredMap, irradianceMap, brdfLUT, mipLevels - 1, sampler);
   }
 
   destroy(): void {
     this.envCubemap.destroy();
+    if (this.skyboxCubemap !== this.envCubemap) this.skyboxCubemap.destroy();
     this.prefilteredMap.destroy();
     this.irradianceMap.destroy();
     this.brdfLUT.destroy();

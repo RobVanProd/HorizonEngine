@@ -263,7 +263,7 @@ export class PBRRenderer {
       layout: skyboxCameraLayout,
       entries: [
         { binding: 0, resource: { buffer: this._cameraBuffer } },
-        { binding: 1, resource: this._environment.envCubemapView },
+        { binding: 1, resource: this._environment.skyboxCubemapView },
         { binding: 2, resource: this._environment.sampler },
       ],
     });

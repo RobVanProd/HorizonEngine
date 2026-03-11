@@ -23,7 +23,12 @@ export class GameDemo {
     _campMaterialHandle = 0;
     _shrineMaterialHandle = 0;
     _overlookMaterialHandle = 0;
+    _springMaterialHandle = 0;
     _springEmitterId = 0;
+    _campMarkerId = 0;
+    _shrineMarkerId = 0;
+    _overlookMarkerId = 0;
+    _springMarkerId = 0;
     _quest = null;
     _anchors = null;
     constructor(engine) {
@@ -44,22 +49,28 @@ export class GameDemo {
             emissive: [1.2, 0.95, 0.45],
         }).handle;
         this._campMaterialHandle = this._engine.createMaterial({
-            albedo: [0.92, 0.5, 0.16, 1],
+            albedo: [0.75, 0.46, 0.18, 1],
             metallic: 0.05,
-            roughness: 0.2,
-            emissive: [1.05, 0.42, 0.14],
+            roughness: 0.4,
+            emissive: [0.18, 0.08, 0.03],
         }).handle;
         this._shrineMaterialHandle = this._engine.createMaterial({
-            albedo: [0.24, 0.78, 0.92, 1],
+            albedo: [0.42, 0.66, 0.74, 1],
             metallic: 0.08,
-            roughness: 0.18,
-            emissive: [0.14, 0.62, 0.9],
+            roughness: 0.34,
+            emissive: [0.04, 0.16, 0.22],
         }).handle;
         this._overlookMaterialHandle = this._engine.createMaterial({
-            albedo: [0.95, 0.84, 0.42, 1],
+            albedo: [0.84, 0.72, 0.36, 1],
             metallic: 0.18,
-            roughness: 0.16,
-            emissive: [0.92, 0.74, 0.2],
+            roughness: 0.28,
+            emissive: [0.2, 0.14, 0.04],
+        }).handle;
+        this._springMaterialHandle = this._engine.createMaterial({
+            albedo: [0.38, 0.68, 0.6, 1],
+            metallic: 0.02,
+            roughness: 0.36,
+            emissive: [0.03, 0.12, 0.1],
         }).handle;
         const route = options.interestPoints && options.interestPoints.length > 0
             ? options.interestPoints
@@ -96,10 +107,11 @@ export class GameDemo {
                 completionText: 'Survey complete. The hollow is stable again.',
             },
         ]);
-        spawnLandmark(this._engine, this._ringMeshHandle, this._campMaterialHandle, sampleHeight, this._anchors.camp, 'Ranger Camp Beacon', 0.2, 1.0);
-        spawnLandmark(this._engine, this._ringMeshHandle, this._shrineMaterialHandle, sampleHeight, this._anchors.shrine, 'Shrine Beacon', 0.28, 1.15);
-        spawnLandmark(this._engine, this._ringMeshHandle, this._overlookMaterialHandle, sampleHeight, this._anchors.overlook, 'Overlook Beacon', 0.38, 1.25);
-        spawnLandmark(this._engine, this._ringMeshHandle, this._shrineMaterialHandle, sampleHeight, this._anchors.spring, 'Spring Focus', -0.12, 0.9);
+        this._campMarkerId = spawnLandmark(this._engine, this._ringMeshHandle, this._campMaterialHandle, sampleHeight, this._anchors.camp, 'Ranger Camp Beacon', 1.18, 1.35);
+        this._shrineMarkerId = spawnLandmark(this._engine, this._ringMeshHandle, this._shrineMaterialHandle, sampleHeight, this._anchors.shrine, 'Shrine Beacon', 1.22, 1.45);
+        this._overlookMarkerId = spawnLandmark(this._engine, this._ringMeshHandle, this._overlookMaterialHandle, sampleHeight, this._anchors.overlook, 'Overlook Beacon', 1.08, 1.6);
+        this._springMarkerId = spawnLandmark(this._engine, this._ringMeshHandle, this._springMaterialHandle, sampleHeight, this._anchors.spring, 'Restored Spring Focus', 1.3, 1.15);
+        this.syncObjectiveMarkers();
         const collectiblePositions = pickCollectiblePositions(route, this._anchors);
         for (const [x, _, z] of collectiblePositions) {
             const h = sampleHeight(x, z) + 0.8;
@@ -188,6 +200,7 @@ export class GameDemo {
             quest.complete('reach_overlook');
         }
         this._complete = quest.getState().complete;
+        this.syncObjectiveMarkers();
         return this.getState();
     }
     getState() {
@@ -210,6 +223,21 @@ export class GameDemo {
         if (this._springEmitterId === 0 || !this._engine.world.has(this._springEmitterId))
             return;
         this._engine.world.setField(this._springEmitterId, ParticleEmitter, 'flags', EmitterFlags.Playing | EmitterFlags.Looping | EmitterFlags.Additive);
+    }
+    syncObjectiveMarkers() {
+        const quest = this._quest;
+        if (!quest)
+            return;
+        const state = quest.getState();
+        this.setMarkerVisible(this._campMarkerId, quest.isCurrent('reach_camp'));
+        this.setMarkerVisible(this._shrineMarkerId, quest.isCurrent('restore_spring'));
+        this.setMarkerVisible(this._springMarkerId, quest.isCurrent('reach_overlook') || state.complete);
+        this.setMarkerVisible(this._overlookMarkerId, quest.isCurrent('reach_overlook') || state.complete);
+    }
+    setMarkerVisible(entityId, visible) {
+        if (entityId === 0 || !this._engine.world.has(entityId))
+            return;
+        this._engine.world.setField(entityId, Visible, '_tag', visible ? 1 : 0);
     }
 }
 export function createGameHud() {
@@ -372,6 +400,7 @@ function spawnLandmark(engine, meshHandle, materialHandle, sampleHeight, point, 
     marker.add(MaterialRef, { handle: materialHandle });
     marker.add(Visible, { _tag: 1 });
     engine.setEntityLabel(marker.id, label);
+    return marker.id;
 }
 function isNear(playerEye, point, radius) {
     return Math.hypot(playerEye[0] - point[0], playerEye[2] - point[2]) <= radius;

@@ -59,7 +59,7 @@ pnpm dev:anim      # Animation + audio + AI demo
 pnpm dev:editor    # Scene editor with procedural terrain, FBX support, and AI commands
 ```
 
-The editor demo loads a boot intro video, then opens the scene editor. With the nature pack present, it now loads a lightweight demo level system and starts with `first-nature-expedition`: a seeded procedural level with a meandering trail, carved clearings, lake-style water placement, clustered vegetation, and a small quest-driven narrative loop. With the construction pack in `downloaded stuff/unfinished_building_high/` (subdirs with `.fbx` files), it loads procedural terrain, a road spline, and lays out assets in a grid. Without either pack, it falls back to the Fox glTF demo. Click **Play** to enter play mode and walk the level in first person. This game demo ships with the engine to showcase what can be built.
+The editor demo loads a boot intro video, then opens the scene editor. With the nature pack present, it now loads a lightweight demo level system and starts with `first-nature-expedition`: a seeded procedural level with a meandering trail, carved clearings, lake-style water placement, clustered vegetation, objective-gated quest beacons, and a small quest-driven narrative loop. The renderer can now keep HDR image-based lighting for reflections while drawing a procedural visible sky, which avoids the blurry photo-probe look in outdoor scenes. With the construction pack in `downloaded stuff/unfinished_building_high/` (subdirs with `.fbx` files), it loads procedural terrain, a road spline, and lays out assets in a grid. Without either pack, it falls back to the Fox glTF demo. Click **Play** to enter play mode and walk the level in first person. This game demo ships with the engine to showcase what can be built.
 
 ## Current Capabilities
 
@@ -78,9 +78,10 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 
 - The editor demo now resolves levels through a small level-definition contract instead of directly hardcoding one scene path.
 - `first-nature-expedition` is the current procedural first level: seeded terrain, a spline-guided trail, explicit meadow clearings, a localized spring/lake water surface, and a collectible route layered on top.
+- The renderer environment config now supports choosing a procedural background sky independently from the lighting probe, so HDR reflections do not force a photographic skybox.
 - The world runtime exposes reusable scatter exclusions (`avoidSpline`, `avoidCircles`) so levels can keep trails and landmarks readable without special-case scene code.
 - The world runtime also exposes water placement controls (`waterScaleX`, `waterScaleZ`, offsets, and material overrides) so a level can ask for a pond, spring, or broad sheet instead of only a full-terrain plane.
-- The gameplay layer now includes a reusable quest-chain helper for authored step progression, story text, and HUD updates. The current slice uses it for camp discovery, seed recovery, shrine restoration, and overlook completion.
+- The gameplay layer now includes a reusable quest-chain helper for authored step progression, story text, HUD updates, and objective-gated marker visibility. The current slice uses it for camp discovery, seed recovery, shrine restoration, and overlook completion.
 - The intent is to keep the demo as a proving ground for engine-facing APIs that AI tools can call and build on, not as a one-off scripted sample.
 
 ## Project Layout

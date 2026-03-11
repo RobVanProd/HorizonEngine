@@ -90,7 +90,13 @@ async function main() {
   await engine.initialize(
     { renderer: 'pbr' },
     {
-      environment: { sunDirection: [0.5, 0.8, 0.3], sunIntensity: 50.0, cubemapSize: 512, hdrData },
+      environment: {
+        sunDirection: [0.42, 0.82, 0.18],
+        sunIntensity: 50.0,
+        cubemapSize: 512,
+        hdrData,
+        backgroundSource: 'procedural',
+      },
       shadow: { resolution: 2048, frustumSize: 80 },
     },
   );
@@ -258,11 +264,11 @@ const NATURE_SCATTER_ASSETS: Array<{
   { file: 'Rock_Medium_1.gltf', density: 0.02, minScale: 0.6, maxScale: 1.4, allowedBiomes: [BiomeId.Alpine], minNormalizedHeight: 0.55, maxNormalizedHeight: 0.95, maxSlope: 0.4, occupationRadiusPixels: 4, noiseScale: 0.05, noiseThreshold: 0.5, noiseSeedOffset: 81 },
   { file: 'Rock_Medium_2.gltf', density: 0.015, minScale: 0.5, maxScale: 1.2, allowedBiomes: [BiomeId.Alpine], minNormalizedHeight: 0.5, maxNormalizedHeight: 0.9, maxSlope: 0.45, occupationRadiusPixels: 4, noiseScale: 0.05, noiseThreshold: 0.53, noiseSeedOffset: 91 },
   // Bushes: plains, low elevation, above water
-  { file: 'Bush_Common.gltf', density: 0.03, minScale: 0.7, maxScale: 1.2, allowedBiomes: [BiomeId.Plains], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.4, maxSlope: 0.05, occupationRadiusPixels: 3, noiseScale: 0.11, noiseThreshold: 0.57, noiseSeedOffset: 101 },
-  { file: 'Plant_1_Big.gltf', density: 0.025, minScale: 0.6, maxScale: 1.0, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.06, maxNormalizedHeight: 0.5, maxSlope: 0.06, occupationRadiusPixels: 2, noiseScale: 0.12, noiseThreshold: 0.53, noiseSeedOffset: 111 },
-  { file: 'Fern_1.gltf', density: 0.04, minScale: 0.5, maxScale: 1.1, allowedBiomes: [BiomeId.Forest], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.6, maxSlope: 0.08, noiseScale: 0.2, noiseThreshold: 0.4, noiseSeedOffset: 100 },
-  // Grass: organic clumping via noise
-  { file: 'Grass_Common_Tall.gltf', density: 0.25, minScale: 0.4, maxScale: 0.9, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.05, maxNormalizedHeight: 0.7, maxSlope: 0.1, noiseScale: 0.15, noiseThreshold: 0.35, noiseSeedOffset: 200 },
+  { file: 'Bush_Common.gltf', density: 0.05, minScale: 0.65, maxScale: 1.15, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.46, maxSlope: 0.06, occupationRadiusPixels: 3, noiseScale: 0.09, noiseThreshold: 0.56, noiseSeedOffset: 101 },
+  { file: 'Plant_1_Big.gltf', density: 0.04, minScale: 0.45, maxScale: 0.85, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.06, maxNormalizedHeight: 0.52, maxSlope: 0.07, occupationRadiusPixels: 1, noiseScale: 0.08, noiseThreshold: 0.5, noiseSeedOffset: 111 },
+  { file: 'Fern_1.gltf', density: 0.06, minScale: 0.45, maxScale: 0.9, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.58, maxSlope: 0.08, occupationRadiusPixels: 1, noiseScale: 0.09, noiseThreshold: 0.54, noiseSeedOffset: 100 },
+  // Grass: tighter meadow-style patches rather than isolated blades across the full terrain.
+  { file: 'Grass_Common_Tall.gltf', density: 0.72, minScale: 0.2, maxScale: 0.42, allowedBiomes: [BiomeId.Plains], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.46, maxSlope: 0.06, occupationRadiusPixels: 0, noiseScale: 0.065, noiseThreshold: 0.58, noiseSeedOffset: 200 },
 ];
 
 interface LayoutCircle {
@@ -356,7 +362,12 @@ function buildFirstLevelQuestAnchors(trail: SplinePoint[], clearings: LayoutCirc
 }
 
 function shouldKeepTrailOpen(file: string): boolean {
-  return !/Grass/i.test(file);
+  return /Tree|Pine|TwistedTree|Bush|Plant|Fern|Grass/i.test(file);
+}
+
+function getTrailAvoidRadius(file: string): number {
+  if (/Grass|Plant|Fern/i.test(file)) return FIRST_LEVEL_TRAIL_WIDTH * 0.55;
+  return FIRST_LEVEL_TRAIL_WIDTH * 0.9;
 }
 
 function shouldKeepClearingsOpen(file: string): boolean {
@@ -371,8 +382,8 @@ async function loadNaturePackDemo(
     direction: [-0.28, -0.92, -0.24],
     color: [1.0, 0.985, 0.96],
     intensity: 4.9,
-    ambient: [0.055, 0.06, 0.07],
-    envIntensity: 1.2,
+    ambient: [0.03, 0.04, 0.045],
+    envIntensity: 1.05,
   };
 
   const registry = getWorldRegistry(engine);
@@ -399,8 +410,8 @@ async function loadNaturePackDemo(
       loadTexture(device, grassRoughUrl),
     ]);
     terrainMat = engine.createMaterial({
-      albedo: [0.84, 0.92, 0.78, 1],
-      roughness: 0.88,
+      albedo: [0.72, 0.8, 0.66, 1],
+      roughness: 0.94,
       metallic: 0,
       albedoTexture: albedoTex,
       normalTexture: normalTex,
@@ -409,7 +420,7 @@ async function loadNaturePackDemo(
   } catch (err) {
     console.warn('[EditorDemo] Terrain textures failed, using flat material', err);
     terrainMat = engine.createMaterial({
-      albedo: [0.22, 0.28, 0.18, 1],
+      albedo: [0.2, 0.26, 0.18, 1],
       roughness: 0.92,
       metallic: 0,
     });
@@ -507,7 +518,7 @@ async function loadNaturePackDemo(
       noiseThreshold: asset.noiseThreshold,
       noiseSeedOffset: asset.noiseSeedOffset,
       avoidSpline: shouldKeepTrailOpen(asset.file) ? firstLevelTrail : undefined,
-      avoidSplineRadius: shouldKeepTrailOpen(asset.file) ? FIRST_LEVEL_TRAIL_WIDTH * 0.9 : FIRST_LEVEL_TRAIL_WIDTH * 0.35,
+      avoidSplineRadius: shouldKeepTrailOpen(asset.file) ? getTrailAvoidRadius(asset.file) : FIRST_LEVEL_TRAIL_WIDTH * 0.35,
       avoidCircles: shouldKeepClearingsOpen(asset.file) ? firstLevelClearings : undefined,
     });
 
