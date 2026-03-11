@@ -8,6 +8,7 @@
       "@engine/scheduler": ["./packages/scheduler/src"],
       "@engine/profiler": ["./packages/profiler/src"],
       "@engine/renderer-webgpu": ["./packages/renderer-webgpu/src"],
+      "@engine/visibility": ["./packages/visibility/src"],
       "@engine/core": ["./packages/core-runtime/src"]
     }
   },

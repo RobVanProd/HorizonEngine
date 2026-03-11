@@ -1,4 +1,5 @@
 export { Renderer } from './renderer.js';
+export { GpuDrivenRenderer } from './gpu-driven-renderer.js';
 export { createCubeGeometry, type Geometry } from './geometry.js';
 export {
   mat4Identity,

@@ -7,6 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "pnpm --filter @engine/benchmark dev",
+    "dev:large": "pnpm --filter @engine/large-scene dev",
     "build": "tsc --build",
     "clean": "rm -rf packages/*/dist examples/*/dist"
   },

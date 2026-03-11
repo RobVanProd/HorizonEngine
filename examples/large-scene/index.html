@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Horizon Engine — Large Scene GPU Culling</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0e; }
+    #app { width: 100%; height: 100%; position: relative; }
+    #overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      color: #c8c8d0;
+      font: 12px/1.5 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+      background: rgba(10, 10, 14, 0.88);
+      border: 1px solid rgba(100, 100, 120, 0.2);
+      border-radius: 6px;
+      padding: 10px 14px;
+      pointer-events: none;
+      min-width: 320px;
+      backdrop-filter: blur(8px);
+    }
+    #overlay h2 {
+      font-size: 13px; font-weight: 600; color: #eee;
+      margin-bottom: 6px; letter-spacing: 0.03em;
+    }
+    .row { display: flex; justify-content: space-between; padding: 1px 0; }
+    .label { color: #777; }
+    .value { font-weight: 500; }
+    .v-green { color: #4c8; }
+    .v-blue { color: #6cf; }
+    .v-yellow { color: #ec6; }
+    .v-red { color: #f66; }
+    .sep { border-top: 1px solid rgba(100,100,120,0.15); margin: 5px 0; }
+    .section-title { color: #aaa; font-weight: 600; margin-top: 4px; margin-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+    #controls {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      color: #aaa;
+      font: 12px/1.5 'JetBrains Mono', 'Fira Code', monospace;
+      background: rgba(10,10,14,0.85);
+      border: 1px solid rgba(100,100,120,0.2);
+      border-radius: 6px;
+      padding: 8px 14px;
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+    }
+    #controls label { cursor: pointer; display: block; padding: 2px 0; }
+    #controls input[type="checkbox"] { margin-right: 6px; }
+    #error-banner {
+      display: none; position: absolute; inset: 0;
+      background: rgba(10,10,14,0.95); color: #f66;
+      font: 16px/1.6 system-ui, sans-serif; padding: 40px; z-index: 10;
+    }
+    #error-banner a { color: #6cf; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="overlay">
+    <h2>Horizon Engine — Phase 1 Large Scene</h2>
+    <div id="stats"></div>
+  </div>
+  <div id="controls">
+    <label><input type="checkbox" id="chk-frustum" checked> GPU Frustum Culling</label>
+    <label><input type="checkbox" id="chk-occlusion"> HZB Occlusion Culling</label>
+    <label><input type="checkbox" id="chk-freeze"> Freeze Culling Camera</label>
+  </div>
+  <div id="error-banner"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

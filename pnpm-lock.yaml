@@ -42,6 +42,33 @@ importers:
         specifier: workspace:*
         version: link:../../packages/scheduler
 
+  examples/large-scene:
+    dependencies:
+      '@engine/core':
+        specifier: workspace:*
+        version: link:../../packages/core-runtime
+      '@engine/ecs':
+        specifier: workspace:*
+        version: link:../../packages/ecs
+      '@engine/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@engine/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      '@engine/profiler':
+        specifier: workspace:*
+        version: link:../../packages/profiler
+      '@engine/renderer-webgpu':
+        specifier: workspace:*
+        version: link:../../packages/renderer-webgpu
+      '@engine/scheduler':
+        specifier: workspace:*
+        version: link:../../packages/scheduler
+      '@engine/visibility':
+        specifier: workspace:*
+        version: link:../../packages/visibility
+
   packages/core-runtime:
     dependencies:
       '@engine/ecs':
@@ -89,6 +116,18 @@ importers:
       '@engine/profiler':
         specifier: workspace:*
         version: link:../profiler
+
+  packages/visibility:
+    dependencies:
+      '@engine/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@engine/profiler':
+        specifier: workspace:*
+        version: link:../profiler
+      '@engine/renderer-webgpu':
+        specifier: workspace:*
+        version: link:../renderer-webgpu
 
 packages:
 
