@@ -32,6 +32,35 @@ describe('world foundations', () => {
     expect(instancesA[0]?.position ?? null).toEqual(instancesB[0]?.position ?? null);
   });
 
+  it('keeps scatter away from reserved splines and clearings', () => {
+    const field = generateHeightfield({ seed: 21, width: 24, depth: 24, cellSize: 2 });
+    const trail = [
+      { position: [0, 0, 22] as [number, number, number] },
+      { position: [46, 0, 22] as [number, number, number] },
+    ];
+    const clearing = { centerX: 22, centerZ: 22, radius: 5 };
+    const baseline = generateScatterInstances(field, {
+      seed: 9,
+      density: 1,
+      maxSlope: 1,
+      allowedBiomes: [0, 1, 2, 3, 4],
+      avoidCircles: [clearing],
+    });
+    const instances = generateScatterInstances(field, {
+      seed: 9,
+      density: 1,
+      maxSlope: 1,
+      allowedBiomes: [0, 1, 2, 3, 4],
+      avoidSpline: trail,
+      avoidSplineRadius: 6,
+      avoidCircles: [clearing],
+    });
+
+    expect(instances.length).toBeGreaterThan(0);
+    expect(instances.length).toBeLessThan(baseline.length);
+    expect(instances.every((instance) => Math.hypot(instance.position[0] - 22, instance.position[2] - 22) > 5)).toBe(true);
+  });
+
   it('maps chunk seeds consistently', () => {
     const controller = new WorldChunkController(99, 32, 64);
     expect(controller.getCellSeed(1, 2)).toBe(controller.getCellSeed(1, 2));

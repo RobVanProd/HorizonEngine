@@ -59,7 +59,7 @@ pnpm dev:anim      # Animation + audio + AI demo
 pnpm dev:editor    # Scene editor with procedural terrain, FBX support, and AI commands
 ```
 
-The editor demo loads a boot intro video, then opens the scene editor. With an asset pack in `downloaded stuff/unfinished_building_high/` (subdirs with `.fbx` files), it loads procedural terrain, a road spline, and lays out assets in a grid. Without the pack, it falls back to the Fox glTF demo.
+The editor demo loads a boot intro video, then opens the scene editor. With the nature pack present, it now loads a lightweight demo level system and starts with `first-nature-expedition`: a seeded procedural level with a meandering trail, carved clearings, clustered vegetation, and collectible route points that AI tools or future gameplay systems can reuse. With the construction pack in `downloaded stuff/unfinished_building_high/` (subdirs with `.fbx` files), it loads procedural terrain, a road spline, and lays out assets in a grid. Without either pack, it falls back to the Fox glTF demo. Click **Play** to enter play mode: collect the glowing orbs by walking near them, use WASD + mouse look to explore, and press **Esc** to return to edit mode. This game demo ships with the engine to showcase what can be built.
 
 ## Current Capabilities
 
@@ -72,6 +72,14 @@ The editor demo loads a boot intro video, then opens the scene editor. With an a
 - Particle effects with spline- and terrain-aware spawning
 - AI command APIs: scene (spawn, list, inspect, setLabel), world (terrain, spline, scatter), editor (viewport, overlays), VFX, geometry stats
 - In-engine devtools plus a scene editor with hierarchy, properties, assets, viewport controls, and transform gizmos
+- Play mode with game demo: collect orbs, objective HUD, ships with engine
+
+## Demo Level System
+
+- The editor demo now resolves levels through a small level-definition contract instead of directly hardcoding one scene path.
+- `first-nature-expedition` is the current procedural first level: seeded terrain, a spline-guided trail, explicit meadow clearings, and a collectible route layered on top.
+- The world runtime exposes reusable scatter exclusions (`avoidSpline`, `avoidCircles`) so levels can keep trails and landmarks readable without special-case scene code.
+- The intent is to keep the demo as a proving ground for engine-facing APIs that AI tools can call and build on, not as a one-off scripted sample.
 
 ## Project Layout
 
@@ -105,6 +113,8 @@ Contributions are welcome. See `CONTRIBUTING.md` for development workflow and ex
 - **Phase 6** — Scene editor and engine vertical slice ✓
 - **Phase 7** — Viewport observability, gizmos, asset layout ✓
 - **Phase 8** — Procedural world foundations, VFX core, lighting, geometry scalability ✓
+- **Phase 9** — Play mode: first-person exploration (WASD + mouse look, pointer lock) ✓
+- **Phase 10** — Game demo: collectible exploration, play HUD, ship with engine *(current)*
 
 ## Internal Design Mantra
 

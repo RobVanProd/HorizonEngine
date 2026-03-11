@@ -1,6 +1,7 @@
 import { Engine } from '@engine/core';
 import {
   AnimationPlayer,
+  HierarchyDepth,
   LocalTransform,
   MaterialRef,
   MeshRef,
@@ -9,13 +10,16 @@ import {
   Visible,
   WorldMatrix,
   createTransformSystem,
+  type ComponentDef,
 } from '@engine/ecs';
 import { Phase } from '@engine/scheduler';
 import {
   buildSkeletonsAndClips,
   loadFbxScene,
   loadGltf,
+  loadGltfScene,
   loadHDR,
+  loadTexture,
   type SceneBounds,
 } from '@engine/assets';
 import { createAnimationSystem, type AnimationRegistries } from '@engine/animation';
@@ -29,10 +33,44 @@ import {
 import { EmitterFlags, ParticleEmitter, ParticleRenderer, getEffectsRuntime } from '@engine/effects';
 import { EngineAI } from '@engine/ai';
 import { Editor, registerEditorCommands } from '@engine/editor';
-import { getWorldRegistry, type SplinePoint } from '@engine/world';
+import {
+  BiomeId,
+  createSeededRandom,
+  generateScatterInstances,
+  getWorldRegistry,
+  OccupancyMap,
+  sampleHeightWorld,
+  sampleSplinePolyline,
+  type SplinePoint,
+} from '@engine/world';
 import { userPackBaseUrl, userPackEntries } from 'virtual:user-pack-manifest';
+import { naturePackBaseUrl, naturePackEntries } from 'virtual:nature-pack-manifest';
+import { GameDemo, createGameHud } from './game-demo.js';
 
 const BOOT_VIDEO_URL = new URL('../../../horizon_loader_blender.mp4', import.meta.url).href;
+const FIRST_LEVEL_ID = 'first-nature-expedition';
+const FIRST_LEVEL_NAME = 'First Nature Expedition';
+const FIRST_LEVEL_SEED = 12345;
+const FIRST_LEVEL_TRAIL_WIDTH = 8;
+
+interface DemoLevelResult {
+  id: string;
+  name: string;
+  bounds: SceneBounds;
+  collectibleRoute?: Array<[number, number, number]>;
+}
+
+interface DemoLevelDefinition {
+  id: string;
+  name: string;
+  isAvailable: () => boolean;
+  load: (
+    engine: Engine,
+    device: GPUDevice,
+    animRegistries: AnimationRegistries,
+    foxUrl: string,
+  ) => Promise<DemoLevelResult | null>;
+}
 
 async function main() {
   await playBootIntro();
@@ -73,7 +111,8 @@ async function main() {
   const animSys = createAnimationSystem(world, animRegistries);
   engine.scheduler.addSystem(Phase.ANIMATE, animSys.update, 'animation');
 
-  const sceneBounds = await loadPreferredDemoScene(engine, device, animRegistries, foxUrl);
+  const level = await loadPreferredDemoScene(engine, device, animRegistries, foxUrl);
+  const sceneBounds = level.bounds;
   const effects = getEffectsRuntime(engine);
   const particleRenderer = new ParticleRenderer(device, engine.gpu.format);
   engine.scheduler.addSystem(Phase.SIMULATE, (ctx) => effects.update(ctx.deltaTime), 'effects');
@@ -82,13 +121,40 @@ async function main() {
   const editor = Editor.create(engine);
   applyCameraPreset(editor, sceneBounds);
 
+  const registry = getWorldRegistry(engine);
+  editor.viewport.camera.setPlayModeGroundSampler((x, z) => registry.sampleGroundHeight(x, z));
+
+  const gameDemo = new GameDemo(engine);
+  gameDemo.spawn({
+    bounds: sceneBounds,
+    groundSampler: (x, z) => registry.sampleGroundHeight(x, z),
+    interestPoints: level.collectibleRoute,
+  });
+
+  const gameHud = createGameHud();
+  editor.layout.viewport.appendChild(gameHud.root);
+
+  let wasPlayMode = false;
+  engine.scheduler.addSystem(Phase.SIMULATE, () => {
+    const playMode = editor.viewport.playMode;
+    if (playMode) {
+      if (!wasPlayMode) gameHud.show();
+      const eye = editor.viewport.camera.getEye();
+      const state = gameDemo.update(eye);
+      gameHud.update(state);
+    } else {
+      if (wasPlayMode) gameHud.hide();
+    }
+    wasPlayMode = playMode;
+  }, 'game-demo');
+
   const ai = EngineAI.attach(engine);
   registerEditorCommands(ai.router, editor);
 
   engine.scheduler.removeSystemByLabel(Phase.RENDER, 'pbr-render');
   const rs = createRenderSystem(world, {
     renderer,
-    registries: { meshes: engine.meshes, materials: engine.materials },
+    registries: { meshes: engine.meshes, materials: engine.materials, waterMaterials: engine.waterMaterials },
     getCamera: () => {
       const canvas = engine.canvas.element;
       const aspect = canvas.width / canvas.height;
@@ -123,18 +189,393 @@ async function loadPreferredDemoScene(
   device: GPUDevice,
   animRegistries: AnimationRegistries,
   foxUrl: string,
-): Promise<SceneBounds> {
-  if (userPackBaseUrl && userPackEntries.length > 0) {
-    const packBounds = await loadConstructionPackDemo(engine, device);
-    if (packBounds) return packBounds;
+): Promise<DemoLevelResult> {
+  const levels: DemoLevelDefinition[] = [
+    {
+      id: FIRST_LEVEL_ID,
+      name: FIRST_LEVEL_NAME,
+      isAvailable: () => Boolean(naturePackBaseUrl && naturePackEntries.length > 0),
+      load: async (levelEngine, levelDevice) => loadNaturePackDemo(levelEngine, levelDevice),
+    },
+    {
+      id: 'construction-showcase',
+      name: 'Construction Showcase',
+      isAvailable: () => Boolean(userPackBaseUrl && userPackEntries.length > 0),
+      load: async (levelEngine, levelDevice) => loadConstructionPackDemo(levelEngine, levelDevice),
+    },
+    {
+      id: 'fox-fallback',
+      name: 'Fox Fallback',
+      isAvailable: () => true,
+      load: async (levelEngine, levelDevice, levelAnimRegistries, levelFoxUrl) => ({
+        id: 'fox-fallback',
+        name: 'Fox Fallback',
+        bounds: await loadFallbackAnimationDemo(levelEngine, levelDevice, levelAnimRegistries, levelFoxUrl),
+      }),
+    },
+  ];
+
+  for (const level of levels) {
+    if (!level.isAvailable()) continue;
+    const loaded = await level.load(engine, device, animRegistries, foxUrl);
+    if (loaded) return loaded;
   }
-  return loadFallbackAnimationDemo(engine, device, animRegistries, foxUrl);
+  return {
+    id: 'fox-fallback',
+    name: 'Fox Fallback',
+    bounds: await loadFallbackAnimationDemo(engine, device, animRegistries, foxUrl),
+  };
+}
+
+/** Curated nature models with biome-specific, height-band, and slope-aware placement. */
+const NATURE_SCATTER_ASSETS: Array<{
+  file: string;
+  density: number;
+  minScale: number;
+  maxScale: number;
+  allowedBiomes?: number[];
+  minNormalizedHeight?: number;
+  maxNormalizedHeight?: number;
+  minSlope?: number;
+  maxSlope?: number;
+  occupationRadiusPixels?: number;
+  noiseScale?: number;
+  noiseThreshold?: number;
+  noiseSeedOffset?: number;
+}> = [
+  // Trees: Forest + Plains (grassland), relaxed slope for rolling terrain
+  { file: 'CommonTree_1.gltf', density: 0.08, minScale: 0.85, maxScale: 1.35, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.8, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.54, noiseSeedOffset: 11 },
+  { file: 'CommonTree_2.gltf', density: 0.06, minScale: 0.9, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.8, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.56, noiseSeedOffset: 21 },
+  { file: 'Pine_1.gltf', density: 0.07, minScale: 0.8, maxScale: 1.25, allowedBiomes: [BiomeId.Forest, BiomeId.Plains, BiomeId.Alpine], minNormalizedHeight: 0.15, maxNormalizedHeight: 0.9, maxSlope: 0.14, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.52, noiseSeedOffset: 31 },
+  { file: 'Pine_2.gltf', density: 0.05, minScale: 0.85, maxScale: 1.15, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.75, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.55, noiseSeedOffset: 41 },
+  { file: 'TwistedTree_1.gltf', density: 0.04, minScale: 0.9, maxScale: 1.1, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.7, maxSlope: 0.1, occupationRadiusPixels: 5, noiseScale: 0.09, noiseThreshold: 0.57, noiseSeedOffset: 51 },
+  { file: 'CommonTree_3.gltf', density: 0.05, minScale: 0.85, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.75, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.55, noiseSeedOffset: 61 },
+  { file: 'Pine_3.gltf', density: 0.04, minScale: 0.8, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Alpine], minNormalizedHeight: 0.2, maxNormalizedHeight: 0.9, maxSlope: 0.15, occupationRadiusPixels: 5, noiseScale: 0.07, noiseThreshold: 0.53, noiseSeedOffset: 71 },
+  // Rocks: higher elevation, rocky/snowy
+  { file: 'Rock_Medium_1.gltf', density: 0.02, minScale: 0.6, maxScale: 1.4, allowedBiomes: [BiomeId.Alpine], minNormalizedHeight: 0.55, maxNormalizedHeight: 0.95, maxSlope: 0.4, occupationRadiusPixels: 4, noiseScale: 0.05, noiseThreshold: 0.5, noiseSeedOffset: 81 },
+  { file: 'Rock_Medium_2.gltf', density: 0.015, minScale: 0.5, maxScale: 1.2, allowedBiomes: [BiomeId.Alpine], minNormalizedHeight: 0.5, maxNormalizedHeight: 0.9, maxSlope: 0.45, occupationRadiusPixels: 4, noiseScale: 0.05, noiseThreshold: 0.53, noiseSeedOffset: 91 },
+  // Bushes: plains, low elevation, above water
+  { file: 'Bush_Common.gltf', density: 0.03, minScale: 0.7, maxScale: 1.2, allowedBiomes: [BiomeId.Plains], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.4, maxSlope: 0.05, occupationRadiusPixels: 3, noiseScale: 0.11, noiseThreshold: 0.57, noiseSeedOffset: 101 },
+  { file: 'Plant_1_Big.gltf', density: 0.025, minScale: 0.6, maxScale: 1.0, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.06, maxNormalizedHeight: 0.5, maxSlope: 0.06, occupationRadiusPixels: 2, noiseScale: 0.12, noiseThreshold: 0.53, noiseSeedOffset: 111 },
+  { file: 'Fern_1.gltf', density: 0.04, minScale: 0.5, maxScale: 1.1, allowedBiomes: [BiomeId.Forest], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.6, maxSlope: 0.08, noiseScale: 0.2, noiseThreshold: 0.4, noiseSeedOffset: 100 },
+  // Grass: organic clumping via noise
+  { file: 'Grass_Common_Tall.gltf', density: 0.25, minScale: 0.4, maxScale: 0.9, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.05, maxNormalizedHeight: 0.7, maxSlope: 0.1, noiseScale: 0.15, noiseThreshold: 0.35, noiseSeedOffset: 200 },
+];
+
+interface LayoutCircle {
+  centerX: number;
+  centerZ: number;
+  radius: number;
+}
+
+function buildFirstLevelTrail(originX: number, originZ: number, terrainSize: number, seed: number): SplinePoint[] {
+  const rng = createSeededRandom(seed ^ 0x5bd1e995);
+  const pointCount = 8;
+  const startX = originX + terrainSize * 0.12;
+  const endX = originX + terrainSize * 0.88;
+  const baseZ = originZ + terrainSize * (0.48 + rng.range(-0.04, 0.04));
+  const ampA = terrainSize * 0.12;
+  const ampB = terrainSize * 0.05;
+  const phaseA = rng.range(-0.6, 0.6);
+  const phaseB = rng.range(0, Math.PI * 2);
+  const minZ = originZ + terrainSize * 0.14;
+  const maxZ = originZ + terrainSize * 0.86;
+  const points: SplinePoint[] = [];
+  for (let i = 0; i < pointCount; i++) {
+    const t = i / Math.max(1, pointCount - 1);
+    const x = lerp(startX, endX, t);
+    const z = baseZ
+      + Math.sin(t * Math.PI * 1.35 + phaseA) * ampA
+      + Math.sin(t * Math.PI * 4.1 + phaseB) * ampB;
+    points.push({
+      position: [x, 0, clamp(z, minZ, maxZ)],
+    });
+  }
+  return points;
+}
+
+function buildFirstLevelClearings(trail: SplinePoint[]): LayoutCircle[] {
+  const samples = sampleSplinePolyline(trail, 12);
+  const picks = [
+    { index: 2, offset: 8, radius: 11 },
+    { index: 6, offset: 0, radius: 13 },
+    { index: 10, offset: -10, radius: 12 },
+  ];
+  return picks.map((pick) => {
+    const sample = samples[pick.index] ?? samples[samples.length - 1]!;
+    const tangent = sample.tangent;
+    const nx = -tangent[2];
+    const nz = tangent[0];
+    return {
+      centerX: sample.position[0] + nx * pick.offset,
+      centerZ: sample.position[2] + nz * pick.offset,
+      radius: pick.radius,
+    };
+  });
+}
+
+function buildFirstLevelCollectibleRoute(trail: SplinePoint[], clearings: LayoutCircle[]): Array<[number, number, number]> {
+  const samples = sampleSplinePolyline(trail, 14);
+  const route: Array<[number, number, number]> = [];
+  const pushSample = (index: number, lateralOffset = 0) => {
+    const sample = samples[index] ?? samples[samples.length - 1]!;
+    const tangent = sample.tangent;
+    const nx = -tangent[2];
+    const nz = tangent[0];
+    route.push([
+      sample.position[0] + nx * lateralOffset,
+      0,
+      sample.position[2] + nz * lateralOffset,
+    ]);
+  };
+
+  pushSample(1, -2);
+  pushSample(3, 2);
+  route.push([clearings[0]!.centerX, 0, clearings[0]!.centerZ]);
+  pushSample(6, -1.5);
+  route.push([clearings[1]!.centerX, 0, clearings[1]!.centerZ]);
+  pushSample(9, 2.5);
+  pushSample(11, -2);
+  route.push([clearings[2]!.centerX, 0, clearings[2]!.centerZ]);
+  return route;
+}
+
+function shouldKeepTrailOpen(file: string): boolean {
+  return !/Grass/i.test(file);
+}
+
+function shouldKeepClearingsOpen(file: string): boolean {
+  return /Tree|Pine|TwistedTree|Bush|Plant|Fern/i.test(file);
+}
+
+async function loadNaturePackDemo(
+  engine: Engine,
+  device: GPUDevice,
+): Promise<DemoLevelResult | null> {
+  engine.lighting = {
+    direction: [-0.35, -0.9, -0.2],
+    color: [1.0, 0.98, 0.95],
+    intensity: 4.4,
+    ambient: [0.04, 0.045, 0.05],
+    envIntensity: 1.1,
+  };
+
+  const registry = getWorldRegistry(engine);
+  const terrainSize = 200;
+  const cellSize = 2;
+  const originX = -terrainSize * 0.5;
+  const originZ = -terrainSize * 0.5;
+  const firstLevelTrail = buildFirstLevelTrail(originX, originZ, terrainSize, FIRST_LEVEL_SEED);
+  const firstLevelClearings = buildFirstLevelClearings(firstLevelTrail);
+  const collectibleRoute = buildFirstLevelCollectibleRoute(firstLevelTrail, firstLevelClearings);
+
+  const PH = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock';
+  let terrainMat: { handle: number };
+  try {
+    const [albedoTex, normalTex, roughTex] = await Promise.all([
+      loadTexture(device, `${PH}/aerial_grass_rock_diff_2k.jpg`, { sRGB: true }),
+      loadTexture(device, `${PH}/aerial_grass_rock_nor_gl_2k.jpg`),
+      loadTexture(device, `${PH}/aerial_grass_rock_rough_2k.jpg`),
+    ]);
+    terrainMat = engine.createMaterial({
+      albedo: [0.9, 0.9, 0.9, 1],
+      roughness: 0.92,
+      metallic: 0,
+      albedoTexture: albedoTex,
+      normalTexture: normalTex,
+      mrTexture: roughTex,
+    });
+  } catch (err) {
+    console.warn('[EditorDemo] Terrain textures failed, using flat material', err);
+    terrainMat = engine.createMaterial({
+      albedo: [0.22, 0.28, 0.18, 1],
+      roughness: 0.92,
+      metallic: 0,
+    });
+  }
+
+  const terrainResult = registry.spawnTerrain({
+    seed: FIRST_LEVEL_SEED,
+    width: 100,
+    depth: 100,
+    cellSize,
+    originX,
+    originZ,
+    baseHeight: 0,
+    heightScale: 16,
+    materialHandle: terrainMat.handle,
+    waterThreshold: 0.1,
+    roadSpline: firstLevelTrail,
+    roadWidth: FIRST_LEVEL_TRAIL_WIDTH,
+    uvScale: 8,
+    uvOffset: [0.37, 0.61],
+    uvRotation: 0.4,
+  });
+  engine.setEntityLabel(terrainResult.entityId, 'Nature Terrain');
+  const trailSpline = registry.spawnSpline(firstLevelTrail, {
+    closed: false,
+    width: FIRST_LEVEL_TRAIL_WIDTH * 0.7,
+  });
+  engine.setEntityLabel(trailSpline.entityId, 'First Level Trail');
+
+  const terrainRec = registry.terrains.get(terrainResult.entityId);
+  if (!terrainRec) return null;
+  const heightfield = terrainRec.heightfield;
+
+  const occupancy = new OccupancyMap(heightfield.width, heightfield.depth);
+
+  const aggregate = createBoundsAccumulator();
+  mergeBounds(aggregate, {
+    min: [originX, heightfield.minHeight, originZ],
+    max: [originX + 100 * cellSize, heightfield.maxHeight, originZ + 100 * cellSize],
+    center: [originX + 50 * cellSize, (heightfield.minHeight + heightfield.maxHeight) * 0.5, originZ + 50 * cellSize],
+    radius: Math.hypot(50 * cellSize, 50 * cellSize),
+  });
+
+  const availableFiles = new Set(naturePackEntries.map((e) => e.file));
+  let placedCount = 0;
+
+  for (const asset of NATURE_SCATTER_ASSETS) {
+    if (!availableFiles.has(asset.file)) continue;
+
+    const sceneUrl = `${naturePackBaseUrl}/${encodeURIComponent(asset.file)}`;
+    let loaded: Awaited<ReturnType<typeof loadGltfScene>>;
+    try {
+      loaded = await loadGltfScene(device, sceneUrl, engine);
+    } catch (err) {
+      console.warn('[EditorDemo] Failed to load nature asset', asset.file, err);
+      continue;
+    }
+
+    const rootId = loaded.entityIds[0];
+    if (rootId === undefined) continue;
+
+    const instances = generateScatterInstances(heightfield, {
+      seed: hashSeed(asset.file),
+      density: asset.density,
+      minScale: asset.minScale,
+      maxScale: asset.maxScale,
+      allowedBiomes: asset.allowedBiomes,
+      minNormalizedHeight: asset.minNormalizedHeight,
+      maxNormalizedHeight: asset.maxNormalizedHeight,
+      minSlope: asset.minSlope,
+      maxSlope: asset.maxSlope,
+      occupancy,
+      occupationRadiusPixels: asset.occupationRadiusPixels,
+      noiseScale: asset.noiseScale,
+      noiseThreshold: asset.noiseThreshold,
+      noiseSeedOffset: asset.noiseSeedOffset,
+      avoidSpline: shouldKeepTrailOpen(asset.file) ? firstLevelTrail : undefined,
+      avoidSplineRadius: shouldKeepTrailOpen(asset.file) ? FIRST_LEVEL_TRAIL_WIDTH * 0.9 : FIRST_LEVEL_TRAIL_WIDTH * 0.35,
+      avoidCircles: shouldKeepClearingsOpen(asset.file) ? firstLevelClearings : undefined,
+    });
+
+    for (const inst of instances) {
+      cloneEntityHierarchy(engine, rootId, inst.position[0], inst.position[1], inst.position[2], inst.scale, inst.rotationY);
+      placedCount++;
+    }
+
+    destroyEntityHierarchy(engine, rootId);
+  }
+
+  if (placedCount === 0) return null;
+
+  const bounds = finalizeAggregateBounds(aggregate);
+  if (!bounds) return null;
+  return {
+    id: FIRST_LEVEL_ID,
+    name: FIRST_LEVEL_NAME,
+    bounds,
+    collectibleRoute,
+  };
+}
+
+function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return h >>> 0;
+}
+
+function getChildren(world: Engine['world'], parentId: number): number[] {
+  const children: number[] = [];
+  world.query(Parent).each((arch, count) => {
+    const parentCol = arch.getColumn(Parent, 'entity') as Uint32Array;
+    const ids = arch.entities.data as Uint32Array;
+    for (let i = 0; i < count; i++) {
+      if (parentCol[i] === parentId) children.push(ids[i]!);
+    }
+  });
+  return children;
+}
+
+function cloneEntityHierarchy(
+  engine: Engine,
+  rootId: number,
+  offsetX: number,
+  offsetY: number,
+  offsetZ: number,
+  scale: number,
+  rotationY: number,
+): number {
+  const world = engine.world;
+  const copyComp = (src: number, dst: number, comp: ComponentDef) => {
+    if (!world.hasComponent(src, comp)) return;
+    world.addComponent(dst, comp);
+    for (const field of comp.fieldNames) {
+      world.setField(dst, comp, field, world.getField(src, comp, field));
+    }
+  };
+
+  function cloneRecursive(srcId: number, newParentId: number | null, isRoot: boolean): number {
+    const dst = world.spawn().id;
+    copyComp(srcId, dst, LocalTransform);
+    copyComp(srcId, dst, WorldMatrix);
+    copyComp(srcId, dst, MeshRef);
+    copyComp(srcId, dst, MaterialRef);
+    copyComp(srcId, dst, Visible);
+
+    if (isRoot) {
+      world.setField(dst, LocalTransform, 'px', offsetX);
+      world.setField(dst, LocalTransform, 'py', offsetY);
+      world.setField(dst, LocalTransform, 'pz', offsetZ);
+      world.setField(dst, LocalTransform, 'rotY', rotationY);
+      world.setField(dst, LocalTransform, 'scaleX', scale);
+      world.setField(dst, LocalTransform, 'scaleY', scale);
+      world.setField(dst, LocalTransform, 'scaleZ', scale);
+    }
+
+    if (newParentId !== null) {
+      world.addComponent(dst, Parent, { entity: newParentId });
+      world.addComponent(dst, HierarchyDepth, { depth: 1 });
+    }
+
+    for (const childId of getChildren(world, srcId)) {
+      cloneRecursive(childId, dst, false);
+    }
+    return dst;
+  }
+
+  return cloneRecursive(rootId, null, true);
+}
+
+function destroyEntityHierarchy(engine: Engine, rootId: number): void {
+  const world = engine.world;
+  const ids: number[] = [];
+  function collect(id: number) {
+    if (!world.has(id)) return;
+    ids.push(id);
+    for (const c of getChildren(world, id)) collect(c);
+  }
+  collect(rootId);
+  for (const id of ids.reverse()) {
+    if (world.has(id)) world.destroy(id);
+  }
 }
 
 async function loadConstructionPackDemo(
   engine: Engine,
   device: GPUDevice,
-): Promise<SceneBounds | null> {
+): Promise<DemoLevelResult | null> {
   engine.lighting = {
     direction: [-0.35, -0.9, -0.2],
     color: [1.0, 0.98, 0.95],
@@ -239,7 +680,19 @@ async function loadConstructionPackDemo(
     return null;
   }
 
-  return bounds;
+  const terrainRec = registry.terrains.get(terrainResult.entityId);
+  const groundY = terrainRec ? terrainRec.heightfield.minHeight - 0.5 : bounds.min[1] - 0.5;
+  spawnGround(engine, 220, bounds.center[0], bounds.center[2], groundY, {
+    albedo: [0.22, 0.26, 0.2, 1],
+    roughness: 0.95,
+    metallic: 0.0,
+  });
+
+  return {
+    id: 'construction-showcase',
+    name: 'Construction Showcase',
+    bounds,
+  };
 }
 
 async function loadFallbackAnimationDemo(
@@ -595,6 +1048,14 @@ function finalizeAggregateBounds(
     center,
     radius: Math.max(1, Math.sqrt(dx * dx + dy * dy + dz * dz)),
   };
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function quaternionToEulerXYZ(q: [number, number, number, number]): [number, number, number] {
