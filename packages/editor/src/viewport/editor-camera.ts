@@ -14,6 +14,7 @@ export class EditorCamera {
   near = 0.1;
   far = 500;
   ortho = false;
+  enabled = true;
 
   private _mode: CameraMode = 'orbit';
   private _canvas: HTMLElement | null = null;
@@ -126,7 +127,26 @@ export class EditorCamera {
     return mat4Multiply(proj, view);
   }
 
+  getForwardVector(): [number, number, number] {
+    return this._getForward();
+  }
+
+  getRightVector(): [number, number, number] {
+    return this._getRight();
+  }
+
+  getUpVector(): [number, number, number] {
+    const right = this._getRight();
+    const forward = this._getForward();
+    return [
+      right[1] * forward[2] - right[2] * forward[1],
+      right[2] * forward[0] - right[0] * forward[2],
+      right[0] * forward[1] - right[1] * forward[0],
+    ];
+  }
+
   private _handleMouseDown(e: MouseEvent): void {
+    if (!this.enabled) return;
     this._dragging = true;
     this._button = e.button;
     this._lastX = e.clientX;
@@ -135,6 +155,7 @@ export class EditorCamera {
   }
 
   private _handleMouseMove(e: MouseEvent): void {
+    if (!this.enabled) return;
     if (!this._dragging) return;
     const dx = e.clientX - this._lastX;
     const dy = e.clientY - this._lastY;
@@ -158,12 +179,14 @@ export class EditorCamera {
   }
 
   private _handleMouseUp(): void {
+    if (!this.enabled) return;
     this._dragging = false;
     this._button = -1;
     if (this._canvas) (this._canvas as HTMLElement).style.cursor = 'default';
   }
 
   private _handleWheel(e: WheelEvent): void {
+    if (!this.enabled) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? 1.1 : 0.9;
     this.distance = Math.max(0.5, Math.min(200, this.distance * factor));

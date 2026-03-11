@@ -5,7 +5,7 @@ import {
 } from '@engine/renderer-webgpu';
 import { EditorCamera, type ViewPreset } from './editor-camera.js';
 import { GridRenderer } from './grid-renderer.js';
-import { GizmoRenderer, type GizmoMode } from '../gizmos/gizmo-renderer.js';
+import { GizmoRenderer, type GizmoAxis, type GizmoMode } from '../gizmos/gizmo-renderer.js';
 import { PickPass } from '../picking/pick-pass.js';
 import { Selection } from '../picking/selection.js';
 import { COLORS, FONT, el } from '../ui/theme.js';
@@ -24,6 +24,22 @@ export interface ViewportHudState {
   backend?: string;
   renderMode?: string;
   warnings?: string;
+}
+
+interface TransformDragState {
+  entityId: number;
+  mode: GizmoMode;
+  axis: GizmoAxis;
+  startX: number;
+  startY: number;
+  startPx: number;
+  startPy: number;
+  startPz: number;
+  startRotY: number;
+  startScaleX: number;
+  startScaleY: number;
+  startScaleZ: number;
+  moved: boolean;
 }
 
 export class Viewport {
@@ -45,6 +61,11 @@ export class Viewport {
   private _gizmoMode: GizmoMode = 'translate';
   private _showGizmo = true;
   private _showGrid = true;
+  private _dragState: TransformDragState | null = null;
+  private _suppressClickPick = false;
+  private _onViewportMouseDown = (e: MouseEvent) => this._onMouseDown(e);
+  private _onViewportMouseMove = (e: MouseEvent) => this._onMouseMove(e);
+  private _onViewportMouseUp = () => this._onMouseUp();
 
   constructor(opts: ViewportOptions) {
     this._engine = opts.engine;
@@ -111,12 +132,19 @@ export class Viewport {
 
     // Click to pick
     this._container.addEventListener('click', async (e) => {
+      if (this._suppressClickPick) {
+        this._suppressClickPick = false;
+        return;
+      }
       if (e.altKey || e.button !== 0) return;
       const rect = this._container.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       await this._doPick(x, y, e.ctrlKey || e.metaKey);
     });
+    this._container.addEventListener('mousedown', this._onViewportMouseDown);
+    window.addEventListener('mousemove', this._onViewportMouseMove);
+    window.addEventListener('mouseup', this._onViewportMouseUp);
 
     this.selection.onChange(() => this._renderHud());
     this._renderHud();
@@ -183,6 +211,87 @@ export class Viewport {
     this._engine.setCamera(vp, eye);
   }
 
+  private _onMouseDown(e: MouseEvent): void {
+    if (e.button !== 0 || e.altKey || !this._showGizmo) return;
+    const selectedId = this.selection.first;
+    if (selectedId === null) return;
+    const world = this._engine.world;
+    if (!world.has(selectedId) || !world.hasComponent(selectedId, LocalTransform)) return;
+
+    const rect = this._container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const axis = this._pickGizmoAxis(selectedId, x, y);
+    const projected = this._projectEntity(selectedId);
+    const centerHit = projected ? Math.hypot(projected.x - x, projected.y - y) <= 56 : false;
+    if (!axis && !centerHit) return;
+
+    this._dragState = {
+      entityId: selectedId,
+      mode: this._gizmoMode,
+      axis,
+      startX: e.clientX,
+      startY: e.clientY,
+      startPx: world.getField(selectedId, LocalTransform, 'px'),
+      startPy: world.getField(selectedId, LocalTransform, 'py'),
+      startPz: world.getField(selectedId, LocalTransform, 'pz'),
+      startRotY: world.getField(selectedId, LocalTransform, 'rotY'),
+      startScaleX: world.getField(selectedId, LocalTransform, 'scaleX'),
+      startScaleY: world.getField(selectedId, LocalTransform, 'scaleY'),
+      startScaleZ: world.getField(selectedId, LocalTransform, 'scaleZ'),
+      moved: false,
+    };
+    e.preventDefault();
+  }
+
+  private _onMouseMove(e: MouseEvent): void {
+    const rect = this._container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (!this._dragState) {
+      const selectedId = this.selection.first;
+      this.gizmoRenderer.hoveredAxis = selectedId !== null && this._showGizmo
+        ? this._pickGizmoAxis(selectedId, x, y)
+        : null;
+      return;
+    }
+
+    if (!this._dragState) return;
+    const dx = e.clientX - this._dragState.startX;
+    const dy = e.clientY - this._dragState.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      this._dragState.moved = true;
+    }
+
+    const world = this._engine.world;
+    const id = this._dragState.entityId;
+    if (!world.has(id) || !world.hasComponent(id, LocalTransform)) {
+      this._dragState = null;
+      return;
+    }
+
+    switch (this._dragState.mode) {
+      case 'translate':
+        this._applyTranslateDrag(id, dx, dy);
+        break;
+      case 'rotate':
+        world.setField(id, LocalTransform, 'rotY', this._dragState.startRotY + dx * 0.01);
+        break;
+      case 'scale':
+        this._applyScaleDrag(id, dx, dy);
+        break;
+    }
+    e.preventDefault();
+  }
+
+  private _onMouseUp(): void {
+    if (!this._dragState) return;
+    this._suppressClickPick = this._dragState.moved;
+    this.gizmoRenderer.hoveredAxis = null;
+    this._dragState = null;
+  }
+
   private async _doPick(x: number, y: number, additive: boolean): Promise<void> {
     // Simplified picking: use entity positions projected to screen space
     const canvas = this._engine.canvas.element;
@@ -230,10 +339,140 @@ export class Viewport {
 
   destroy(): void {
     this.camera.detach();
+    this._container.removeEventListener('mousedown', this._onViewportMouseDown);
     this.gridRenderer.destroy();
     this.gizmoRenderer.destroy();
     this.pickPass.destroy();
+    window.removeEventListener('mousemove', this._onViewportMouseMove);
+    window.removeEventListener('mouseup', this._onViewportMouseUp);
     this._overlay.remove();
+  }
+
+  private _projectEntity(entityId: number): { x: number; y: number } | null {
+    const world = this._engine.world;
+    if (!world.has(entityId) || !world.hasComponent(entityId, LocalTransform)) return null;
+
+    const wx = world.getField(entityId, LocalTransform, 'px');
+    const wy = world.getField(entityId, LocalTransform, 'py');
+    const wz = world.getField(entityId, LocalTransform, 'pz');
+    return this._projectWorldPoint(wx, wy, wz);
+  }
+
+  private _projectWorldPoint(wx: number, wy: number, wz: number): { x: number; y: number } | null {
+    const canvas = this._engine.canvas.element;
+    const aspect = canvas.width / canvas.height;
+    const vp = this.camera.getViewProjection(aspect);
+    const cx = vp[0]! * wx + vp[4]! * wy + vp[8]! * wz + vp[12]!;
+    const cy = vp[1]! * wx + vp[5]! * wy + vp[9]! * wz + vp[13]!;
+    const cw = vp[3]! * wx + vp[7]! * wy + vp[11]! * wz + vp[15]!;
+    if (cw <= 0) return null;
+
+    return {
+      x: (cx / cw * 0.5 + 0.5) * canvas.clientWidth,
+      y: (-cy / cw * 0.5 + 0.5) * canvas.clientHeight,
+    };
+  }
+
+  private _pickGizmoAxis(entityId: number, x: number, y: number): GizmoAxis {
+    const world = this._engine.world;
+    if (!world.has(entityId) || !world.hasComponent(entityId, LocalTransform)) return null;
+
+    const px = world.getField(entityId, LocalTransform, 'px');
+    const py = world.getField(entityId, LocalTransform, 'py');
+    const pz = world.getField(entityId, LocalTransform, 'pz');
+    const eye = this.camera.getEye();
+    const distToCamera = Math.hypot(eye[0] - px, eye[1] - py, eye[2] - pz);
+    const gizmoScale = distToCamera * 0.15;
+    const center = this._projectWorldPoint(px, py, pz);
+    if (!center) return null;
+
+    const handles: Array<{ axis: Exclude<GizmoAxis, 'xy' | 'xz' | 'yz' | null>; end: [number, number, number] }> = [
+      { axis: 'x', end: [px + gizmoScale, py, pz] },
+      { axis: 'y', end: [px, py + gizmoScale, pz] },
+      { axis: 'z', end: [px, py, pz + gizmoScale] },
+    ];
+
+    let bestAxis: GizmoAxis = null;
+    let bestDistance = 18;
+    for (const handle of handles) {
+      const end = this._projectWorldPoint(handle.end[0], handle.end[1], handle.end[2]);
+      if (!end) continue;
+      const distance = this._pointToSegmentDistance(x, y, center.x, center.y, end.x, end.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestAxis = handle.axis;
+      }
+    }
+    return bestAxis;
+  }
+
+  private _pointToSegmentDistance(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const lenSq = abx * abx + aby * aby;
+    if (lenSq < 1e-6) return Math.hypot(px - ax, py - ay);
+    const t = Math.max(0, Math.min(1, ((px - ax) * abx + (py - ay) * aby) / lenSq));
+    const qx = ax + abx * t;
+    const qy = ay + aby * t;
+    return Math.hypot(px - qx, py - qy);
+  }
+
+  private _applyTranslateDrag(entityId: number, dx: number, dy: number): void {
+    if (!this._dragState) return;
+    const world = this._engine.world;
+    if (this._dragState.axis === 'x' || this._dragState.axis === 'y' || this._dragState.axis === 'z') {
+      const origin = this._projectWorldPoint(this._dragState.startPx, this._dragState.startPy, this._dragState.startPz);
+      if (!origin) return;
+      const axisEnd = this._projectWorldPoint(
+        this._dragState.startPx + (this._dragState.axis === 'x' ? 1 : 0),
+        this._dragState.startPy + (this._dragState.axis === 'y' ? 1 : 0),
+        this._dragState.startPz + (this._dragState.axis === 'z' ? 1 : 0),
+      );
+      if (!axisEnd) return;
+      const axisScreenX = axisEnd.x - origin.x;
+      const axisScreenY = axisEnd.y - origin.y;
+      const axisScreenLength = Math.hypot(axisScreenX, axisScreenY);
+      if (axisScreenLength < 1e-4) return;
+      const distancePx = (dx * axisScreenX + dy * axisScreenY) / axisScreenLength;
+      const worldUnits = distancePx / axisScreenLength;
+      world.setField(entityId, LocalTransform, 'px', this._dragState.startPx + (this._dragState.axis === 'x' ? worldUnits : 0));
+      world.setField(entityId, LocalTransform, 'py', this._dragState.startPy + (this._dragState.axis === 'y' ? worldUnits : 0));
+      world.setField(entityId, LocalTransform, 'pz', this._dragState.startPz + (this._dragState.axis === 'z' ? worldUnits : 0));
+      return;
+    }
+
+    const height = Math.max(1, this._container.clientHeight);
+    const fovRad = this.camera.fov * Math.PI / 180;
+    const worldPerPixel = (2 * Math.tan(fovRad * 0.5) * this.camera.distance) / height;
+    const right = this.camera.getRightVector();
+    const up = this.camera.getUpVector();
+    const moveX = dx * worldPerPixel;
+    const moveY = -dy * worldPerPixel;
+
+    world.setField(entityId, LocalTransform, 'px', this._dragState.startPx + right[0] * moveX + up[0] * moveY);
+    world.setField(entityId, LocalTransform, 'py', this._dragState.startPy + right[1] * moveX + up[1] * moveY);
+    world.setField(entityId, LocalTransform, 'pz', this._dragState.startPz + right[2] * moveX + up[2] * moveY);
+  }
+
+  private _applyScaleDrag(entityId: number, dx: number, dy: number): void {
+    if (!this._dragState) return;
+    const world = this._engine.world;
+    const factor = Math.max(0.1, Math.exp((dx - dy) * 0.01));
+    if (this._dragState.axis === 'x') {
+      world.setField(entityId, LocalTransform, 'scaleX', this._dragState.startScaleX * factor);
+      return;
+    }
+    if (this._dragState.axis === 'y') {
+      world.setField(entityId, LocalTransform, 'scaleY', this._dragState.startScaleY * factor);
+      return;
+    }
+    if (this._dragState.axis === 'z') {
+      world.setField(entityId, LocalTransform, 'scaleZ', this._dragState.startScaleZ * factor);
+      return;
+    }
+    world.setField(entityId, LocalTransform, 'scaleX', this._dragState.startScaleX * factor);
+    world.setField(entityId, LocalTransform, 'scaleY', this._dragState.startScaleY * factor);
+    world.setField(entityId, LocalTransform, 'scaleZ', this._dragState.startScaleZ * factor);
   }
 
   private _corner(vertical: 'top' | 'bottom', horizontal: 'left' | 'right'): HTMLDivElement {

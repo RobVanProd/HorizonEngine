@@ -34,6 +34,7 @@ struct VOut {
 
 const MAX_VERTS = 8192;
 const FLOATS_PER_VERT = 7; // xyz + rgba
+const THICKNESS_RATIO = 0.012;
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 export type GizmoAxis = 'x' | 'y' | 'z' | 'xy' | 'xz' | 'yz' | null;
@@ -148,6 +149,70 @@ export class GizmoRenderer {
     this._lineCount++;
   }
 
+  private _pushThickLine(
+    p0: [number, number, number],
+    p1: [number, number, number],
+    color: [number, number, number, number],
+    axisHint: GizmoAxis | 'free',
+    scale: number,
+  ): void {
+    const thickness = Math.max(scale * THICKNESS_RATIO, 0.01);
+    this._pushLine(p0, p1, color);
+
+    if (axisHint === 'x') {
+      this._pushLine(
+        [p0[0], p0[1] + thickness, p0[2]],
+        [p1[0], p1[1] + thickness, p1[2]],
+        color,
+      );
+      this._pushLine(
+        [p0[0], p0[1], p0[2] + thickness],
+        [p1[0], p1[1], p1[2] + thickness],
+        color,
+      );
+      return;
+    }
+
+    if (axisHint === 'y') {
+      this._pushLine(
+        [p0[0] + thickness, p0[1], p0[2]],
+        [p1[0] + thickness, p1[1], p1[2]],
+        color,
+      );
+      this._pushLine(
+        [p0[0], p0[1], p0[2] + thickness],
+        [p1[0], p1[1], p1[2] + thickness],
+        color,
+      );
+      return;
+    }
+
+    if (axisHint === 'z') {
+      this._pushLine(
+        [p0[0] + thickness, p0[1], p0[2]],
+        [p1[0] + thickness, p1[1], p1[2]],
+        color,
+      );
+      this._pushLine(
+        [p0[0], p0[1] + thickness, p0[2]],
+        [p1[0], p1[1] + thickness, p1[2]],
+        color,
+      );
+      return;
+    }
+
+    this._pushLine(
+      [p0[0] + thickness, p0[1], p0[2]],
+      [p1[0] + thickness, p1[1], p1[2]],
+      color,
+    );
+    this._pushLine(
+      [p0[0], p0[1] + thickness, p0[2]],
+      [p1[0], p1[1] + thickness, p1[2]],
+      color,
+    );
+  }
+
   drawTranslate(center: [number, number, number], scale: number): void {
     const s = scale;
     const cx = center[0], cy = center[1], cz = center[2];
@@ -161,7 +226,7 @@ export class GizmoRenderer {
     for (const { axis, dir } of axes) {
       const col = this.hoveredAxis === axis ? HOVER_COLOR : AXIS_COLORS[axis!]!;
       const end: [number, number, number] = [cx + dir[0], cy + dir[1], cz + dir[2]];
-      this._pushLine(center, end, col);
+      this._pushThickLine(center, end, col, axis, s);
 
       // Arrow head (two lines forming a V)
       const headLen = s * 0.15;
@@ -180,8 +245,8 @@ export class GizmoRenderer {
           end[1] - dir[1] * 0.15 - offset[1],
           end[2] - dir[2] * 0.15 - offset[2],
         ];
-        this._pushLine(tip, base1, col);
-        this._pushLine(tip, base2, col);
+        this._pushThickLine(tip, base1, col, 'free', s);
+        this._pushThickLine(tip, base2, col, 'free', s);
       }
     }
   }
@@ -201,7 +266,7 @@ export class GizmoRenderer {
       for (let i = 0; i < segs; i++) {
         const t0 = (i / segs) * Math.PI * 2;
         const t1 = ((i + 1) / segs) * Math.PI * 2;
-        this._pushLine(genPoint(t0), genPoint(t1), col);
+        this._pushThickLine(genPoint(t0), genPoint(t1), col, axis, s);
       }
     }
   }
@@ -220,7 +285,7 @@ export class GizmoRenderer {
     for (const { axis, dir } of axes) {
       const col = this.hoveredAxis === axis ? HOVER_COLOR : AXIS_COLORS[axis!]!;
       const end: [number, number, number] = [cx + dir[0], cy + dir[1], cz + dir[2]];
-      this._pushLine(center, end, col);
+      this._pushThickLine(center, end, col, axis, s);
 
       // Box at end (4 lines forming a square cross)
       for (let i = 0; i < 3; i++) {
@@ -229,7 +294,7 @@ export class GizmoRenderer {
         off[i] = boxSize;
         const a: [number, number, number] = [end[0] + off[0], end[1] + off[1], end[2] + off[2]];
         const b: [number, number, number] = [end[0] - off[0], end[1] - off[1], end[2] - off[2]];
-        this._pushLine(a, b, col);
+        this._pushThickLine(a, b, col, 'free', s);
       }
     }
   }

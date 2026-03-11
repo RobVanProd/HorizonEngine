@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./horizon_logo_horizontal.svg" alt="Horizon Engine" width="640" />
+</p>
+
 # Horizon Engine
 
 **A WebGPU-native, TypeScript-first open-source engine for large-scale real-time 3D worlds.**
