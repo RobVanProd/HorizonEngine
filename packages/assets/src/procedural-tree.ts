@@ -254,7 +254,13 @@ async function loadTextureFromThreeTexture(
     return createTextureFromExternalImage(device, externalImage, sRGB, texture.flipY);
   }
   const src = getThreeTextureSourceUrl(texture);
-  if (!src) return undefined;
+  if (!src) {
+    console.warn('[ProceduralTree] Texture source unavailable; using color fallback.', {
+      name: texture.name,
+      uuid: texture.uuid,
+    });
+    return undefined;
+  }
   return loadTexture(device, src, { sRGB, flipY: texture.flipY });
 }
 
@@ -269,7 +275,7 @@ function getThreeTextureSourceUrl(texture: Texture): string | undefined {
 }
 
 async function resolveThreeTextureImage(texture: Texture): Promise<GPUImageCopyExternalImageSource | null> {
-  const image = texture.source?.data ?? texture.image;
+  const image = await waitForThreeTextureSource(texture);
   if (!image) return null;
 
   if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
@@ -290,6 +296,19 @@ async function resolveThreeTextureImage(texture: Texture): Promise<GPUImageCopyE
   }
 
   return null;
+}
+
+async function waitForThreeTextureSource(
+  texture: Texture,
+  timeoutMs = 4000,
+): Promise<unknown | null> {
+  const start = Date.now();
+  let image = texture.source?.data ?? texture.image;
+  while (!image && Date.now() - start < timeoutMs) {
+    await delay(16);
+    image = texture.source?.data ?? texture.image;
+  }
+  return image ?? null;
 }
 
 function createTextureFromExternalImage(
@@ -357,6 +376,16 @@ async function waitForHtmlImage(image: HTMLImageElement): Promise<void> {
     image.addEventListener('load', onLoad, { once: true });
     image.addEventListener('error', onError, { once: true });
   }).catch(() => undefined);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+      window.setTimeout(resolve, ms);
+      return;
+    }
+    setTimeout(resolve, ms);
+  });
 }
 
 function colorToLinearRgba(color: { r: number; g: number; b: number } | null): [number, number, number, number] {
