@@ -55,8 +55,8 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
       const cellCenterZ = heightfield.originZ + (z + 0.5) * heightfield.cellSize;
       const clusterRadius = heightfield.cellSize * 0.5;
       const bladeCount = Math.max(
-        4,
-        Math.round(options.bladesPerCell * (0.82 + (((cellSeed >>> 20) & 0xff) / 255) * 1.08)),
+        8,
+        Math.round(options.bladesPerCell * (1.12 + (((cellSeed >>> 20) & 0xff) / 255) * 1.36)),
       );
       for (let bladeIndex = 0; bladeIndex < bladeCount; bladeIndex++) {
         const bladeSeed = hash2D(cellSeed ^ 0x45d9f3b, bladeIndex, options.seed);
