@@ -27,6 +27,7 @@ import { createAnimationSystem, type AnimationRegistries } from '@engine/animati
 import {
   GPUMesh,
   type GrassMaterial,
+  type GrassMaterialParams,
   createPlane,
   createRenderSystem,
   createSphere,
@@ -484,50 +485,65 @@ async function loadNaturePackDemo(
   }
   registry.paintBiomeCircle(terrainResult.entityId, questAnchors.spring[0], questAnchors.spring[2], 10, BiomeId.River);
 
-  const grassField = buildStylizedGrassMesh(heightfield, {
+  const grassAvoidCircles = firstLevelClearings.map((clearing) => ({
+    centerX: clearing.centerX,
+    centerZ: clearing.centerZ,
+    radius: clearing.radius * 0.9,
+  }));
+
+  const grassUnderCanopy = buildStylizedGrassMesh(heightfield, {
     seed: FIRST_LEVEL_SEED ^ 0x9e3779b9,
     density: 1,
-    bladesPerCell: 22,
-    minBladeHeight: 0.46,
-    maxBladeHeight: 1.04,
-    bladeWidth: 0.12,
+    bladesPerCell: 38,
+    minBladeHeight: 0.14,
+    maxBladeHeight: 0.3,
+    bladeWidth: 0.1,
     allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
     minNormalizedHeight: 0.05,
     maxNormalizedHeight: 0.62,
     maxSlope: 0.12,
     avoidSpline: firstLevelTrail,
     avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.58,
-    avoidCircles: firstLevelClearings.map((clearing) => ({
-      centerX: clearing.centerX,
-      centerZ: clearing.centerZ,
-      radius: clearing.radius * 0.9,
-    })),
+    avoidCircles: grassAvoidCircles,
   });
-  if (grassField.indices.length > 0) {
-    const grassMeshHandle = engine.registerMesh(GPUMesh.create(device, grassField));
-    const grassMaterialHandle = nextGrassMaterialHandle++;
-    demoGrassMaterials.set(grassMaterialHandle, engine.pbrRenderer.createGrassMaterial({
-      baseColor: [0.24, 0.46, 0.17],
-      tipColor: [0.72, 0.88, 0.42],
-      windStrength: 0.18,
-      windScale: 0.062,
-      windSpeed: 0.84,
-      ambientStrength: 0.52,
-      translucency: 0.2,
-      patchScale: 0.07,
-    }));
-    const grassEntity = engine.world.spawn();
-    grassEntity.add(LocalTransform, {
-      px: 0, py: 0, pz: 0,
-      rotX: 0, rotY: 0, rotZ: 0,
-      scaleX: 1, scaleY: 1, scaleZ: 1,
-    });
-    grassEntity.add(WorldMatrix, identityWorldMatrix());
-    grassEntity.add(MeshRef, { handle: grassMeshHandle });
-    grassEntity.add(GrassRef, { handle: grassMaterialHandle });
-    grassEntity.add(Visible, { _tag: 1 });
-    engine.setEntityLabel(grassEntity.id, 'Stylized Grass Field');
-  }
+  spawnGrassLayer(engine, device, grassUnderCanopy, {
+    label: 'Grass Under Canopy',
+    baseColor: [0.24, 0.48, 0.16],
+    tipColor: [0.58, 0.76, 0.3],
+    windStrength: 0.06,
+    windScale: 0.05,
+    windSpeed: 0.55,
+    ambientStrength: 0.62,
+    translucency: 0.08,
+    patchScale: 0.055,
+  });
+
+  const grassUpperField = buildStylizedGrassMesh(heightfield, {
+    seed: FIRST_LEVEL_SEED ^ 0x3c6ef372,
+    density: 0.98,
+    bladesPerCell: 14,
+    minBladeHeight: 0.42,
+    maxBladeHeight: 0.88,
+    bladeWidth: 0.075,
+    allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
+    minNormalizedHeight: 0.05,
+    maxNormalizedHeight: 0.62,
+    maxSlope: 0.11,
+    avoidSpline: firstLevelTrail,
+    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.62,
+    avoidCircles: grassAvoidCircles,
+  });
+  spawnGrassLayer(engine, device, grassUpperField, {
+    label: 'Stylized Grass Field',
+    baseColor: [0.2, 0.42, 0.15],
+    tipColor: [0.62, 0.8, 0.34],
+    windStrength: 0.16,
+    windScale: 0.06,
+    windSpeed: 0.82,
+    ambientStrength: 0.5,
+    translucency: 0.16,
+    patchScale: 0.07,
+  });
 
   const occupancy = new OccupancyMap(heightfield.width, heightfield.depth);
 
@@ -1188,6 +1204,31 @@ function identityWorldMatrix() {
     m8: 0, m9: 0, m10: 1, m11: 0,
     m12: 0, m13: 0, m14: 0, m15: 1,
   };
+}
+
+function spawnGrassLayer(
+  engine: Engine,
+  device: GPUDevice,
+  meshData: MeshData,
+  options: GrassMaterialParams & { label: string },
+): void {
+  if (meshData.indices.length === 0) return;
+
+  const grassMeshHandle = engine.registerMesh(GPUMesh.create(device, meshData));
+  const grassMaterialHandle = nextGrassMaterialHandle++;
+  demoGrassMaterials.set(grassMaterialHandle, engine.pbrRenderer.createGrassMaterial(options));
+
+  const grassEntity = engine.world.spawn();
+  grassEntity.add(LocalTransform, {
+    px: 0, py: 0, pz: 0,
+    rotX: 0, rotY: 0, rotZ: 0,
+    scaleX: 1, scaleY: 1, scaleZ: 1,
+  });
+  grassEntity.add(WorldMatrix, identityWorldMatrix());
+  grassEntity.add(MeshRef, { handle: grassMeshHandle });
+  grassEntity.add(GrassRef, { handle: grassMaterialHandle });
+  grassEntity.add(Visible, { _tag: 1 });
+  engine.setEntityLabel(grassEntity.id, options.label);
 }
 
 async function loadEmbeddedTexture(
