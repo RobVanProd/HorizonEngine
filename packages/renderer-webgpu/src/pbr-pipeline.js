@@ -22,7 +22,9 @@ import pbrShaderSource from './shaders/pbr.wgsl?raw';
 import pbrSkinnedShaderSource from './shaders/pbr-skinned.wgsl?raw';
 import skyboxShaderSource from './shaders/skybox.wgsl?raw';
 import waterShaderSource from './shaders/water.wgsl?raw';
+import grassShaderSource from './shaders/grass.wgsl?raw';
 import { WaterMaterial } from './water-material.js';
+import { GrassMaterial } from './grass-material.js';
 const CAMERA_BUFFER_SIZE = 160;
 const LIGHT_BUFFER_SIZE = 256;
 const OBJECT_BUFFER_SIZE = 128;
@@ -52,11 +54,17 @@ export class PBRRenderer {
     _skinnedObjectBindGroups = [];
     _draws = [];
     _waterDraws = [];
+    _grassDraws = [];
     _waterPipeline;
     _waterLightBindGroup;
     _waterObjectBuffers = [];
     _waterObjectBindGroups = [];
     _waterMaterialLayout;
+    _grassPipeline;
+    _grassLightBindGroup;
+    _grassObjectBuffers = [];
+    _grassObjectBindGroups = [];
+    _grassMaterialLayout;
     _frameStats = {
         drawCount: 0,
         triangleCount: 0,
@@ -72,6 +80,7 @@ export class PBRRenderer {
     }
     get materialLayout() { return this._materialLayout; }
     get waterMaterialLayout() { return this._waterMaterialLayout; }
+    get grassMaterialLayout() { return this._grassMaterialLayout; }
     get device() { return this._gpu.device; }
     get environment() { return this._environment; }
     get shadowMap() { return this._shadowMap; }
@@ -286,14 +295,47 @@ export class PBRRenderer {
             primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
             depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' },
         });
+        const grassLightLayout = device.createBindGroupLayout({
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+            ],
+        });
+        this._grassMaterialLayout = device.createBindGroupLayout({
+            entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
+        });
+        this._grassLightBindGroup = device.createBindGroup({
+            layout: grassLightLayout,
+            entries: [{ binding: 0, resource: { buffer: this._lightBuffer } }],
+        });
+        for (let i = 0; i < MAX_OBJECTS; i++) {
+            const buf = device.createBuffer({ size: OBJECT_BUFFER_SIZE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            this._grassObjectBuffers.push(buf);
+            this._grassObjectBindGroups.push(device.createBindGroup({
+                layout: objectLayout,
+                entries: [{ binding: 0, resource: { buffer: buf } }],
+            }));
+        }
+        const grassModule = device.createShaderModule({ code: grassShaderSource });
+        this._grassPipeline = device.createRenderPipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [cameraLayout, grassLightLayout, this._grassMaterialLayout, objectLayout],
+            }),
+            vertex: { module: grassModule, entryPoint: 'vs_main', buffers: [PBR_VERTEX_LAYOUT] },
+            fragment: { module: grassModule, entryPoint: 'fs_main', targets: [{ format }] },
+            primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'ccw' },
+            depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+        });
         this._initialized = true;
-        console.log('[PBR] Pipeline ready: IBL + shadows + skybox + water + skinning');
+        console.log('[PBR] Pipeline ready: IBL + shadows + skybox + water + grass + skinning');
     }
     createMaterial(params) {
         return new PBRMaterial(this._gpu.device, this._materialLayout, params);
     }
     createWaterMaterial(params) {
         return new WaterMaterial(this._gpu.device, this._waterMaterialLayout, params);
+    }
+    createGrassMaterial(params) {
+        return new GrassMaterial(this._gpu.device, this._grassMaterialLayout, params);
     }
     drawWaterMesh(mesh, material, modelMatrix) {
         if (this._waterDraws.length >= MAX_OBJECTS)
@@ -306,6 +348,19 @@ export class PBRRenderer {
         data.set(modelMatrix, 0);
         computeNormalMatrix(modelMatrix, data, 16);
         this._gpu.device.queue.writeBuffer(this._waterObjectBuffers[idx], 0, data);
+    }
+    drawGrassMesh(mesh, material, modelMatrix) {
+        if (this._grassDraws.length >= MAX_OBJECTS)
+            return;
+        this._grassDraws.push({ mesh, material, modelMatrix });
+        this._frameStats.drawCount++;
+        this._frameStats.triangleCount += mesh.triangleCount;
+        this._frameStats.meshletCount += mesh.meshletCount;
+        const idx = this._grassDraws.length - 1;
+        const data = new Float32Array(32);
+        data.set(modelMatrix, 0);
+        computeNormalMatrix(modelMatrix, data, 16);
+        this._gpu.device.queue.writeBuffer(this._grassObjectBuffers[idx], 0, data);
     }
     setCamera(viewProjection, position) {
         const data = new Float32Array(40);
@@ -360,6 +415,7 @@ export class PBRRenderer {
         this._ensureDepthSize();
         this._draws.length = 0;
         this._waterDraws.length = 0;
+        this._grassDraws.length = 0;
         this._frameStats = {
             drawCount: 0,
             triangleCount: 0,
@@ -490,6 +546,18 @@ export class PBRRenderer {
             pass.setIndexBuffer(wd.mesh.indexBuffer, 'uint32');
             pass.drawIndexed(wd.mesh.indexCount);
         }
+        for (let i = 0; i < this._grassDraws.length; i++) {
+            const gd = this._grassDraws[i];
+            gd.material.upload(waterTime);
+            pass.setPipeline(this._grassPipeline);
+            pass.setBindGroup(0, this._cameraBindGroup);
+            pass.setBindGroup(1, this._grassLightBindGroup);
+            pass.setBindGroup(2, gd.material.bindGroup);
+            pass.setBindGroup(3, this._grassObjectBindGroups[i]);
+            pass.setVertexBuffer(0, gd.mesh.vertexBuffer);
+            pass.setIndexBuffer(gd.mesh.indexBuffer, 'uint32');
+            pass.drawIndexed(gd.mesh.indexCount);
+        }
         afterMainPass?.(pass);
         pass.end();
         if (this._profilingEnabled && this._gpuProfiler) {
@@ -513,6 +581,8 @@ export class PBRRenderer {
         for (const b of this._jointBuffers)
             b.destroy();
         for (const b of this._waterObjectBuffers)
+            b.destroy();
+        for (const b of this._grassObjectBuffers)
             b.destroy();
     }
     _createDepthTexture() {

@@ -1,6 +1,7 @@
 import { Engine } from '@engine/core';
 import {
   AnimationPlayer,
+  GrassRef,
   HierarchyDepth,
   LocalTransform,
   MaterialRef,
@@ -25,6 +26,7 @@ import {
 import { createAnimationSystem, type AnimationRegistries } from '@engine/animation';
 import {
   GPUMesh,
+  type GrassMaterial,
   createPlane,
   createRenderSystem,
   createSphere,
@@ -46,12 +48,15 @@ import {
 import { userPackBaseUrl, userPackEntries } from 'virtual:user-pack-manifest';
 import { naturePackBaseUrl, naturePackEntries } from 'virtual:nature-pack-manifest';
 import { GameDemo, createGameHud, type GameQuestAnchors } from './game-demo.js';
+import { buildStylizedGrassMesh } from './grass-field.js';
 
 const BOOT_VIDEO_URL = new URL('../../../horizon_loader_blender.mp4', import.meta.url).href;
 const FIRST_LEVEL_ID = 'first-nature-expedition';
 const FIRST_LEVEL_NAME = 'First Nature Expedition';
 const FIRST_LEVEL_SEED = 12345;
 const FIRST_LEVEL_TRAIL_WIDTH = 8;
+const demoGrassMaterials = new Map<number, GrassMaterial>();
+let nextGrassMaterialHandle = 500_000;
 
 interface DemoLevelResult {
   id: string;
@@ -163,7 +168,12 @@ async function main() {
   engine.scheduler.removeSystemByLabel(Phase.RENDER, 'pbr-render');
   const rs = createRenderSystem(world, {
     renderer,
-    registries: { meshes: engine.meshes, materials: engine.materials, waterMaterials: engine.waterMaterials },
+    registries: {
+      meshes: engine.meshes,
+      materials: engine.materials,
+      waterMaterials: engine.waterMaterials,
+      grassMaterials: demoGrassMaterials,
+    },
     getCamera: () => {
       const canvas = engine.canvas.element;
       const aspect = canvas.width / canvas.height;
@@ -257,7 +267,7 @@ const NATURE_SCATTER_ASSETS: Array<{
   { file: 'CommonTree_2.gltf', density: 0.06, minScale: 0.9, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.8, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.56, noiseSeedOffset: 21 },
   { file: 'Pine_1.gltf', density: 0.07, minScale: 0.8, maxScale: 1.25, allowedBiomes: [BiomeId.Forest, BiomeId.Plains, BiomeId.Alpine], minNormalizedHeight: 0.15, maxNormalizedHeight: 0.9, maxSlope: 0.14, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.52, noiseSeedOffset: 31 },
   { file: 'Pine_2.gltf', density: 0.05, minScale: 0.85, maxScale: 1.15, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.75, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.55, noiseSeedOffset: 41 },
-  { file: 'TwistedTree_1.gltf', density: 0.04, minScale: 0.9, maxScale: 1.1, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.7, maxSlope: 0.1, occupationRadiusPixels: 5, noiseScale: 0.09, noiseThreshold: 0.57, noiseSeedOffset: 51 },
+  { file: 'TwistedTree_1.gltf', density: 0.008, minScale: 0.9, maxScale: 1.1, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.7, maxSlope: 0.1, occupationRadiusPixels: 5, noiseScale: 0.09, noiseThreshold: 0.62, noiseSeedOffset: 51 },
   { file: 'CommonTree_3.gltf', density: 0.05, minScale: 0.85, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.75, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.55, noiseSeedOffset: 61 },
   { file: 'Pine_3.gltf', density: 0.04, minScale: 0.8, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Alpine], minNormalizedHeight: 0.2, maxNormalizedHeight: 0.9, maxSlope: 0.15, occupationRadiusPixels: 5, noiseScale: 0.07, noiseThreshold: 0.53, noiseSeedOffset: 71 },
   // Rocks: higher elevation, rocky/snowy
@@ -473,6 +483,51 @@ async function loadNaturePackDemo(
     registry.paintBiomeCircle(terrainResult.entityId, clearing.centerX, clearing.centerZ, clearing.radius + 5, BiomeId.Plains);
   }
   registry.paintBiomeCircle(terrainResult.entityId, questAnchors.spring[0], questAnchors.spring[2], 10, BiomeId.River);
+
+  const grassField = buildStylizedGrassMesh(heightfield, {
+    seed: FIRST_LEVEL_SEED ^ 0x9e3779b9,
+    density: 0.82,
+    bladesPerCell: 5,
+    minBladeHeight: 0.78,
+    maxBladeHeight: 1.85,
+    bladeWidth: 0.42,
+    allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
+    minNormalizedHeight: 0.05,
+    maxNormalizedHeight: 0.62,
+    maxSlope: 0.09,
+    avoidSpline: firstLevelTrail,
+    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.62,
+    avoidCircles: firstLevelClearings.map((clearing) => ({
+      centerX: clearing.centerX,
+      centerZ: clearing.centerZ,
+      radius: clearing.radius * 0.9,
+    })),
+  });
+  if (grassField.indices.length > 0) {
+    const grassMeshHandle = engine.registerMesh(GPUMesh.create(device, grassField));
+    const grassMaterialHandle = nextGrassMaterialHandle++;
+    demoGrassMaterials.set(grassMaterialHandle, engine.pbrRenderer.createGrassMaterial({
+      baseColor: [0.16, 0.34, 0.12],
+      tipColor: [0.74, 0.9, 0.4],
+      windStrength: 0.22,
+      windScale: 0.075,
+      windSpeed: 0.95,
+      ambientStrength: 0.48,
+      translucency: 0.3,
+      patchScale: 0.1,
+    }));
+    const grassEntity = engine.world.spawn();
+    grassEntity.add(LocalTransform, {
+      px: 0, py: 0, pz: 0,
+      rotX: 0, rotY: 0, rotZ: 0,
+      scaleX: 1, scaleY: 1, scaleZ: 1,
+    });
+    grassEntity.add(WorldMatrix, identityWorldMatrix());
+    grassEntity.add(MeshRef, { handle: grassMeshHandle });
+    grassEntity.add(GrassRef, { handle: grassMaterialHandle });
+    grassEntity.add(Visible, { _tag: 1 });
+    engine.setEntityLabel(grassEntity.id, 'Stylized Grass Field');
+  }
 
   const occupancy = new OccupancyMap(heightfield.width, heightfield.depth);
 

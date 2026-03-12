@@ -6,16 +6,20 @@
  */
 
 import type { World, Query } from '@engine/ecs';
-import { WorldMatrix, MeshRef, MaterialRef, Visible, SkeletonRef } from '@engine/ecs';
+import { WorldMatrix, MeshRef, MaterialRef, WaterRef, GrassRef, Visible, SkeletonRef } from '@engine/ecs';
 import type { FrameContext } from '@engine/scheduler';
 import type { PBRRenderer } from './pbr-pipeline.js';
 import type { GPUMesh } from './mesh.js';
 import type { PBRMaterial } from './pbr-material.js';
+import type { WaterMaterial } from './water-material.js';
+import type { GrassMaterial } from './grass-material.js';
 import type { SceneLighting } from './pbr-pipeline.js';
 
 export interface RenderRegistries {
   meshes: Map<number, GPUMesh>;
   materials: Map<number, PBRMaterial>;
+  waterMaterials?: Map<number, WaterMaterial>;
+  grassMaterials?: Map<number, GrassMaterial>;
 }
 
 export interface RenderSystemContext {
@@ -43,6 +47,8 @@ export function createRenderSystem(
   ctx: RenderSystemContext,
 ): { query: Query; render: (fc: FrameContext) => void } {
   const query = world.query(WorldMatrix, MeshRef, MaterialRef, Visible);
+  const waterQuery = world.query(WorldMatrix, MeshRef, WaterRef, Visible);
+  const grassQuery = world.query(WorldMatrix, MeshRef, GrassRef, Visible);
 
   function render(_fc: FrameContext): void {
     const cam = ctx.getCamera();
@@ -81,6 +87,50 @@ export function createRenderSystem(
         ctx.renderer.drawMesh(mesh, mat, _mat);
       }
     });
+
+    if (ctx.registries.waterMaterials) {
+      waterQuery.each((arch, count) => {
+        const meshHandles = arch.getColumn(MeshRef, 'handle');
+        const waterHandles = arch.getColumn(WaterRef, 'handle');
+        const wmCols = WM_FIELDS.map(f => arch.getColumn(WorldMatrix, f));
+
+        for (let i = 0; i < count; i++) {
+          const mesh = ctx.registries.meshes.get(meshHandles[i]!);
+          const waterMat = ctx.registries.waterMaterials!.get(waterHandles[i]!);
+          if (!mesh || !waterMat) continue;
+
+          for (let c = 0; c < 16; c++) _mat[c] = wmCols[c]![i]!;
+          if (!isMeshVisible(_mat, mesh.boundsMin, mesh.boundsMax, mesh.boundsRadius, _planes)) {
+            ctx.renderer.recordCulledMesh(mesh);
+            continue;
+          }
+
+          ctx.renderer.drawWaterMesh(mesh, waterMat, _mat);
+        }
+      });
+    }
+
+    if (ctx.registries.grassMaterials) {
+      grassQuery.each((arch, count) => {
+        const meshHandles = arch.getColumn(MeshRef, 'handle');
+        const grassHandles = arch.getColumn(GrassRef, 'handle');
+        const wmCols = WM_FIELDS.map(f => arch.getColumn(WorldMatrix, f));
+
+        for (let i = 0; i < count; i++) {
+          const mesh = ctx.registries.meshes.get(meshHandles[i]!);
+          const grassMat = ctx.registries.grassMaterials!.get(grassHandles[i]!);
+          if (!mesh || !grassMat) continue;
+
+          for (let c = 0; c < 16; c++) _mat[c] = wmCols[c]![i]!;
+          if (!isMeshVisible(_mat, mesh.boundsMin, mesh.boundsMax, mesh.boundsRadius, _planes)) {
+            ctx.renderer.recordCulledMesh(mesh);
+            continue;
+          }
+
+          ctx.renderer.drawGrassMesh(mesh, grassMat, _mat);
+        }
+      });
+    }
 
     ctx.renderer.endFrame(ctx.afterMainPass);
   }

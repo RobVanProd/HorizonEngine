@@ -15,6 +15,8 @@ export {
 // Phase 3+4: PBR pipeline with IBL, shadows, skybox
 export { PBRRenderer, type SceneLighting, type PointLight, type LightingDebugView } from './pbr-pipeline.js';
 export { PBRMaterial, type PBRMaterialParams } from './pbr-material.js';
+export { WaterMaterial, type WaterMaterialParams } from './water-material.js';
+export { GrassMaterial, type GrassMaterialParams } from './grass-material.js';
 export {
   GPUMesh,
   PBR_VERTEX_LAYOUT,

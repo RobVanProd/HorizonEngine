@@ -13,6 +13,8 @@ export {
 export {
   MeshRef,
   MaterialRef,
+  WaterRef,
+  GrassRef,
   Visible,
   SkeletonRef,
   AnimationPlayer,
