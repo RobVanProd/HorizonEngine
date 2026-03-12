@@ -19,6 +19,10 @@ export interface PBRMaterialParams {
   roughness?: number;
   emissive?: [number, number, number];
   ao?: number;
+  /** Alpha cutout: discard fragments with alpha < alphaCutoff. 0 = disabled. */
+  alphaCutoff?: number;
+  /** Disable back-face culling and flip shading normals for back faces. */
+  doubleSided?: boolean;
   albedoTexture?: GPUTexture;
   normalTexture?: GPUTexture;
   mrTexture?: GPUTexture;
@@ -80,6 +84,9 @@ export class PBRMaterial {
   emissive: [number, number, number];
   ao: number;
 
+  alphaCutoff: number;
+  doubleSided: boolean;
+
   constructor(device: GPUDevice, layout: GPUBindGroupLayout, params: PBRMaterialParams = {}) {
     this._device = device;
     this.albedo = params.albedo ?? [1, 1, 1, 1];
@@ -87,6 +94,8 @@ export class PBRMaterial {
     this.roughness = params.roughness ?? 0.5;
     this.emissive = params.emissive ?? [0, 0, 0];
     this.ao = params.ao ?? 1;
+    this.alphaCutoff = params.alphaCutoff ?? 0;
+    this.doubleSided = params.doubleSided ?? false;
 
     this.uniformBuffer = device.createBuffer({
       size: MATERIAL_BUFFER_SIZE,
@@ -117,6 +126,8 @@ export class PBRMaterial {
       !!params.normalTexture,
       !!params.mrTexture,
       !!params.emissiveTexture,
+      params.alphaCutoff ?? 0,
+      params.doubleSided ?? false,
     );
   }
 
@@ -124,7 +135,7 @@ export class PBRMaterial {
    * Upload current parameter values to the GPU.
    */
   upload(): void {
-    this._writeUniforms(false, false, false, false);
+    this._writeUniforms(false, false, false, false, this.alphaCutoff, this.doubleSided);
   }
 
   updateParams(params: Partial<PBRMaterialParams>): void {
@@ -133,10 +144,19 @@ export class PBRMaterial {
     if (params.roughness !== undefined) this.roughness = params.roughness;
     if (params.emissive) this.emissive = params.emissive;
     if (params.ao !== undefined) this.ao = params.ao;
+    if (params.alphaCutoff !== undefined) this.alphaCutoff = params.alphaCutoff;
+    if (params.doubleSided !== undefined) this.doubleSided = params.doubleSided;
     this.upload();
   }
 
-  private _writeUniforms(hasAlbedo: boolean, hasNormal: boolean, hasMR: boolean, hasEmissive: boolean): void {
+  private _writeUniforms(
+    hasAlbedo: boolean,
+    hasNormal: boolean,
+    hasMR: boolean,
+    hasEmissive: boolean,
+    alphaCutoff: number = this.alphaCutoff,
+    doubleSided: boolean = this.doubleSided,
+  ): void {
     const d = this._data;
     d[0] = this.albedo[0];
     d[1] = this.albedo[1];
@@ -152,8 +172,8 @@ export class PBRMaterial {
     d[11] = hasNormal ? 1 : 0;
     d[12] = hasMR ? 1 : 0;
     d[13] = hasEmissive ? 1 : 0;
-    d[14] = 0;
-    d[15] = 0;
+    d[14] = alphaCutoff;
+    d[15] = doubleSided ? 1 : 0;
     this._device.queue.writeBuffer(this.uniformBuffer, 0, d as Float32Array<ArrayBuffer>);
   }
 

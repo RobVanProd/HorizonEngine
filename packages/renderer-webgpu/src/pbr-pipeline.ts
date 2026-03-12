@@ -87,6 +87,7 @@ interface GrassDrawEntry {
 export class PBRRenderer {
   private _gpu: GPUContext;
   private _pipeline!: GPURenderPipeline;
+  private _doubleSidedPipeline!: GPURenderPipeline;
   private _skyboxPipeline!: GPURenderPipeline;
   private _depthTexture!: GPUTexture;
   private _depthView!: GPUTextureView;
@@ -105,6 +106,7 @@ export class PBRRenderer {
   private _skyboxBindGroup: GPUBindGroup | null = null;
 
   private _skinnedPipeline!: GPURenderPipeline;
+  private _doubleSidedSkinnedPipeline!: GPURenderPipeline;
   private _skinnedObjectLayout!: GPUBindGroupLayout;
   private _jointBuffers: GPUBuffer[] = [];
   private _skinnedObjectBindGroups: GPUBindGroup[] = [];
@@ -264,6 +266,15 @@ export class PBRRenderer {
       primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
+    this._doubleSidedPipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [cameraLayout, lightLayout, this._materialLayout, objectLayout],
+      }),
+      vertex: { module: pbrModule, entryPoint: 'vs_main', buffers: [PBR_VERTEX_LAYOUT] },
+      fragment: { module: pbrModule, entryPoint: 'fs_main', targets: [{ format }] },
+      primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'ccw' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    });
 
     const skyboxModule = device.createShaderModule({ code: skyboxShaderSource });
     const skyboxCameraLayout = device.createBindGroupLayout({
@@ -307,6 +318,15 @@ export class PBRRenderer {
       vertex: { module: skinnedModule, entryPoint: 'vs_main', buffers: [PBR_SKINNED_VERTEX_LAYOUT] },
       fragment: { module: skinnedModule, entryPoint: 'fs_main', targets: [{ format }] },
       primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    });
+    this._doubleSidedSkinnedPipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [cameraLayout, lightLayout, this._materialLayout, this._skinnedObjectLayout],
+      }),
+      vertex: { module: skinnedModule, entryPoint: 'vs_main', buffers: [PBR_SKINNED_VERTEX_LAYOUT] },
+      fragment: { module: skinnedModule, entryPoint: 'fs_main', targets: [{ format }] },
+      primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'ccw' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
 
@@ -610,11 +630,15 @@ export class PBRRenderer {
     pass.setBindGroup(1, this._lightBindGroup);
 
     // Static objects
-    let hasStatic = false;
+    let currentStaticPipeline: GPURenderPipeline | null = null;
     for (let i = 0; i < this._draws.length; i++) {
       const dc = this._draws[i]!;
       if (dc.skinned) continue;
-      if (!hasStatic) { pass.setPipeline(this._pipeline); hasStatic = true; }
+      const pipeline = dc.material.doubleSided ? this._doubleSidedPipeline : this._pipeline;
+      if (currentStaticPipeline !== pipeline) {
+        pass.setPipeline(pipeline);
+        currentStaticPipeline = pipeline;
+      }
       pass.setBindGroup(2, dc.material.bindGroup);
       pass.setBindGroup(3, this._objectBindGroups[i]!);
       pass.setVertexBuffer(0, dc.mesh.vertexBuffer);
@@ -623,11 +647,15 @@ export class PBRRenderer {
     }
 
     // Skinned objects
-    let hasSkinned = false;
+    let currentSkinnedPipeline: GPURenderPipeline | null = null;
     for (let i = 0; i < this._draws.length; i++) {
       const dc = this._draws[i]!;
       if (!dc.skinned) continue;
-      if (!hasSkinned) { pass.setPipeline(this._skinnedPipeline); hasSkinned = true; }
+      const pipeline = dc.material.doubleSided ? this._doubleSidedSkinnedPipeline : this._skinnedPipeline;
+      if (currentSkinnedPipeline !== pipeline) {
+        pass.setPipeline(pipeline);
+        currentSkinnedPipeline = pipeline;
+      }
       pass.setBindGroup(2, dc.material.bindGroup);
       pass.setBindGroup(3, this._skinnedObjectBindGroups[i]!);
       pass.setVertexBuffer(0, dc.mesh.vertexBuffer);

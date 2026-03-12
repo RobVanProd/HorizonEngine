@@ -34,7 +34,8 @@ struct MaterialUniforms {
   hasNormalTex: f32,
   hasMRTex: f32,
   hasEmissiveTex: f32,
-  _pad: vec2f,
+  alphaCutoff: f32,
+  doubleSided: f32,
 };
 
 struct ModelUniforms {
@@ -70,6 +71,16 @@ struct VertexInput {
 
 struct VertexOutput {
   @builtin(position) clipPos: vec4f,
+  @location(0) worldPos: vec3f,
+  @location(1) worldNormal: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) worldTangent: vec3f,
+  @location(4) bitangentSign: f32,
+};
+
+struct FragmentInput {
+  @builtin(position) clipPos: vec4f,
+  @builtin(front_facing) frontFacing: bool,
   @location(0) worldPos: vec3f,
   @location(1) worldNormal: vec3f,
   @location(2) uv: vec2f,
@@ -153,7 +164,7 @@ fn computeShadow(worldPos: vec3f) -> f32 {
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+ fn fs_main(in: FragmentInput) -> @location(0) vec4f {
   // Normal mapping
   var N = normalize(in.worldNormal);
   if (material.hasNormalTex > 0.5) {
@@ -163,11 +174,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let ns = textureSample(normalTex, texSampler, in.uv).xyz * 2.0 - 1.0;
     N = normalize(TBN * ns);
   }
+  if (material.doubleSided > 0.5 && !in.frontFacing) {
+    N = -N;
+  }
 
   // Material parameters
   var albedo = material.albedo.rgb;
+  var alpha = material.albedo.a;
   if (material.hasAlbedoTex > 0.5) {
-    albedo *= textureSample(albedoTex, texSampler, in.uv).rgb;
+    let albedoSample = textureSample(albedoTex, texSampler, in.uv);
+    albedo *= albedoSample.rgb;
+    alpha *= albedoSample.a;
+  }
+  // Alpha cutout (MASK): discard fragments below cutoff
+  if (material.alphaCutoff > 0.0 && alpha < material.alphaCutoff) {
+    discard;
   }
 
   var metallic = material.metallic;
@@ -292,5 +313,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   color = aces(color);
   color = pow(color, vec3f(1.0 / 2.2));
 
-  return vec4f(color, material.albedo.a);
+  return vec4f(color, alpha);
 }

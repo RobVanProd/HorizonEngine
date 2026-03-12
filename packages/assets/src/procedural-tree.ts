@@ -12,6 +12,7 @@ import { GPUMesh, type MeshData, type PBRMaterialParams } from '@engine/renderer
 import {
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   Mesh,
   MeshPhongMaterial,
   Texture,
@@ -232,6 +233,7 @@ async function createMaterialHandle(
     roughness: 0.82,
     metallic: 0,
     alphaCutoff,
+    doubleSided: material.side === DoubleSide,
   };
 
   if (material.map) {
