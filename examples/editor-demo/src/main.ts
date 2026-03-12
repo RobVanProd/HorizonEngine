@@ -491,61 +491,32 @@ async function loadNaturePackDemo(
     radius: clearing.radius * 0.9,
   }));
 
-  const grassUnderCanopy = buildStylizedGrassMesh(heightfield, {
+  const grassField = buildStylizedGrassMesh(heightfield, {
     seed: FIRST_LEVEL_SEED ^ 0x9e3779b9,
     density: 1,
-    bladesPerCell: 54,
-    minBladeHeight: 0.12,
-    maxBladeHeight: 0.24,
-    bladeWidth: 0.16,
-    profile: 'coverage',
-    clusterRadiusMultiplier: 0.58,
+    bladesPerCell: 24,
+    minBladeHeight: 0.4,
+    maxBladeHeight: 0.94,
+    bladeWidth: 0.1,
+    clusterRadiusMultiplier: 0.62,
     allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
     minNormalizedHeight: 0.05,
     maxNormalizedHeight: 0.62,
     maxSlope: 0.12,
     avoidSpline: firstLevelTrail,
-    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.58,
+    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.54,
     avoidCircles: grassAvoidCircles,
   });
-  spawnGrassLayer(engine, device, grassUnderCanopy, {
-    label: 'Grass Under Canopy',
-    baseColor: [0.24, 0.48, 0.16],
-    tipColor: [0.58, 0.76, 0.3],
-    windStrength: 0.06,
-    windScale: 0.05,
-    windSpeed: 0.55,
-    ambientStrength: 0.62,
-    translucency: 0.08,
-    patchScale: 0.055,
-  });
-
-  const grassUpperField = buildStylizedGrassMesh(heightfield, {
-    seed: FIRST_LEVEL_SEED ^ 0x3c6ef372,
-    density: 0.98,
-    bladesPerCell: 14,
-    minBladeHeight: 0.42,
-    maxBladeHeight: 0.88,
-    bladeWidth: 0.075,
-    clusterRadiusMultiplier: 0.48,
-    allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
-    minNormalizedHeight: 0.05,
-    maxNormalizedHeight: 0.62,
-    maxSlope: 0.11,
-    avoidSpline: firstLevelTrail,
-    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.62,
-    avoidCircles: grassAvoidCircles,
-  });
-  spawnGrassLayer(engine, device, grassUpperField, {
+  spawnGrassLayer(engine, device, grassField, {
     label: 'Stylized Grass Field',
-    baseColor: [0.2, 0.42, 0.15],
-    tipColor: [0.62, 0.8, 0.34],
-    windStrength: 0.16,
-    windScale: 0.06,
-    windSpeed: 0.82,
-    ambientStrength: 0.5,
-    translucency: 0.16,
-    patchScale: 0.07,
+    baseColor: [0.36, 0.86, 0.42],
+    tipColor: [0.76, 1, 0.66],
+    windStrength: 0.11,
+    windScale: 0.08,
+    windSpeed: 0.9,
+    ambientStrength: 0.54,
+    translucency: 0.12,
+    patchScale: 0.09,
   });
 
   const occupancy = new OccupancyMap(heightfield.width, heightfield.depth);

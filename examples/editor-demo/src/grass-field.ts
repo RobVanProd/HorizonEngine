@@ -37,6 +37,9 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
   const indices: number[] = [];
   let vertexOffset = 0;
 
+  const fieldWidth = Math.max((heightfield.width - 1) * heightfield.cellSize, heightfield.cellSize);
+  const fieldDepth = Math.max((heightfield.depth - 1) * heightfield.cellSize, heightfield.cellSize);
+
   for (let z = 0; z < heightfield.depth - 1; z++) {
     for (let x = 0; x < heightfield.width - 1; x++) {
       const idx = z * heightfield.width + x;
@@ -57,9 +60,10 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
       const cellCenterZ = heightfield.originZ + (z + 0.5) * heightfield.cellSize;
       const clusterRadius = heightfield.cellSize * (options.clusterRadiusMultiplier ?? 0.5);
       const bladeCount = Math.max(
-        8,
-        Math.round(options.bladesPerCell * (1.12 + (((cellSeed >>> 20) & 0xff) / 255) * 1.36)),
+        1,
+        Math.round(options.bladesPerCell * (0.72 + (((cellSeed >>> 20) & 0xff) / 255) * 0.68)),
       );
+
       for (let bladeIndex = 0; bladeIndex < bladeCount; bladeIndex++) {
         const bladeSeed = hash2D(cellSeed ^ 0x45d9f3b, bladeIndex, options.seed);
         const localRadius = clusterRadius * Math.sqrt(((bladeSeed >>> 3) & 0xff) / 255);
@@ -69,51 +73,37 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
         if (isExcluded(px, pz, options)) continue;
 
         const py = sampleHeightWorld(heightfield, px, pz);
-        const hT = ((bladeSeed >>> 19) & 0xff) / 255;
-        const bladeHeight = options.minBladeHeight + (options.maxBladeHeight - options.minBladeHeight) * hT;
-        const width = options.bladeWidth * (0.55 + (((bladeSeed >>> 7) & 0xff) / 255) * 0.35);
+        const heightT = ((bladeSeed >>> 19) & 0xff) / 255;
+        const bladeHeight = options.minBladeHeight + (options.maxBladeHeight - options.minBladeHeight) * heightT;
+        const width = options.bladeWidth * (0.82 + (((bladeSeed >>> 7) & 0xff) / 255) * 0.32);
+        const fieldU = clamp01((px - heightfield.originX) / fieldWidth);
+        const fieldV = clamp01((pz - heightfield.originZ) / fieldDepth);
         const phase = ((bladeSeed >>> 23) & 0xff) / 255;
         const normal = sampleNormal(heightfield, x, z);
         const angle = (((bladeSeed >>> 1) & 0xffff) / 0xffff) * Math.PI * 2;
         const tipBend = ((((bladeSeed >>> 5) ^ 0x7f4a7c15) & 0xffff) / 0xffff) * Math.PI * 2;
-        const lean = 0.07 + (((bladeSeed >>> 15) & 0xff) / 255) * 0.14;
+        const variation = (((bladeSeed >>> 27) & 0x1f) / 0x1f);
 
-        vertexOffset = options.profile === 'coverage'
-          ? appendCoveragePatch(
-              positions,
-              normals,
-              uvs,
-              tangents,
-              indices,
-              vertexOffset,
-              px,
-              py,
-              pz,
-              width,
-              bladeHeight,
-              angle,
-              tipBend,
-              phase,
-              normal,
-            )
-          : appendBlade(
-              positions,
-              normals,
-              uvs,
-              tangents,
-              indices,
-              vertexOffset,
-              px,
-              py,
-              pz,
-              width,
-              bladeHeight,
-              angle,
-              tipBend,
-              phase,
-              lean,
-              normal,
-            );
+        vertexOffset = appendDemoBlade(
+          positions,
+          normals,
+          uvs,
+          tangents,
+          indices,
+          vertexOffset,
+          px,
+          py,
+          pz,
+          width,
+          bladeHeight,
+          angle,
+          tipBend,
+          fieldU,
+          fieldV,
+          phase,
+          variation,
+          normal,
+        );
       }
     }
   }
@@ -127,7 +117,7 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
   };
 }
 
-function appendCoveragePatch(
+function appendDemoBlade(
   positions: number[],
   normals: number[],
   uvs: number[],
@@ -141,131 +131,52 @@ function appendCoveragePatch(
   height: number,
   angle: number,
   tipBendAngle: number,
+  fieldU: number,
+  fieldV: number,
   phase: number,
+  variation: number,
   terrainNormal: [number, number, number],
 ): number {
-  let nextOffset = vertexOffset;
-  nextOffset = appendCoverageCard(
-    positions, normals, uvs, tangents, indices, nextOffset,
-    px, py, pz, width * 1.35, height, angle, tipBendAngle, phase, terrainNormal,
-  );
-  nextOffset = appendCoverageCard(
-    positions, normals, uvs, tangents, indices, nextOffset,
-    px, py, pz, width * 1.2, height * 0.94, angle + Math.PI * 0.5, tipBendAngle + Math.PI * 0.25, phase * 0.8 + 0.11, terrainNormal,
-  );
-  return nextOffset;
-}
-
-function appendCoverageCard(
-  positions: number[],
-  normals: number[],
-  uvs: number[],
-  tangents: number[],
-  indices: number[],
-  vertexOffset: number,
-  px: number,
-  py: number,
-  pz: number,
-  width: number,
-  height: number,
-  angle: number,
-  tipBendAngle: number,
-  phase: number,
-  terrainNormal: [number, number, number],
-): number {
-  const dx = Math.cos(angle) * width * 0.5;
-  const dz = Math.sin(angle) * width * 0.5;
-  const tipOffset = width * 0.26;
-  const tipLeanX = Math.cos(tipBendAngle) * tipOffset;
-  const tipLeanZ = Math.sin(tipBendAngle) * tipOffset;
+  const halfWidth = width * 0.5;
+  const midWidth = width * 0.25;
+  const tipOffset = width * (0.18 + variation * 0.22);
+  const yawUnitX = Math.sin(angle);
+  const yawUnitZ = -Math.cos(angle);
+  const tipUnitX = Math.sin(tipBendAngle);
+  const tipUnitZ = -Math.cos(tipBendAngle);
   const bladeNormal = blendBladeNormal(angle, terrainNormal);
 
   const verts = [
-    [px - dx, py, pz - dz, phase, 0],
-    [px + dx, py, pz + dz, phase, 0],
-    [px - dx * 0.32 + tipLeanX, py + height, pz - dz * 0.32 + tipLeanZ, phase, 1],
-    [px + dx * 0.32 + tipLeanX, py + height, pz + dz * 0.32 + tipLeanZ, phase, 1],
+    [px + yawUnitX * halfWidth, py, pz + yawUnitZ * halfWidth, 0],
+    [px - yawUnitX * halfWidth, py, pz - yawUnitZ * halfWidth, 0],
+    [px - yawUnitX * midWidth, py + height * 0.52, pz - yawUnitZ * midWidth, 0.5],
+    [px + yawUnitX * midWidth, py + height * 0.52, pz + yawUnitZ * midWidth, 0.5],
+    [px + tipUnitX * tipOffset, py + height, pz + tipUnitZ * tipOffset, 1],
   ] as const;
 
   for (const vert of verts) {
     positions.push(vert[0], vert[1], vert[2]);
     normals.push(bladeNormal[0], bladeNormal[1], bladeNormal[2]);
-    uvs.push(vert[3], vert[4]);
-    tangents.push(1, 0, 0, 1);
+    uvs.push(fieldU, fieldV);
+    tangents.push(vert[3], phase, variation, 1);
   }
 
   indices.push(
     vertexOffset + 0, vertexOffset + 1, vertexOffset + 2,
-    vertexOffset + 2, vertexOffset + 1, vertexOffset + 3,
+    vertexOffset + 2, vertexOffset + 4, vertexOffset + 3,
+    vertexOffset + 3, vertexOffset + 0, vertexOffset + 2,
   );
 
-  return vertexOffset + 4;
-}
-
-function appendBlade(
-  positions: number[],
-  normals: number[],
-  uvs: number[],
-  tangents: number[],
-  indices: number[],
-  vertexOffset: number,
-  px: number,
-  py: number,
-  pz: number,
-  width: number,
-  height: number,
-  angle: number,
-  tipBendAngle: number,
-  phase: number,
-  lean: number,
-  terrainNormal: [number, number, number],
-): number {
-  const dx = Math.cos(angle) * width * 0.5;
-  const dz = Math.sin(angle) * width * 0.5;
-  const midDx = dx * 0.5;
-  const midDz = dz * 0.5;
-  const upperDx = dx * 0.22;
-  const upperDz = dz * 0.22;
-  const tipOffset = width * (0.8 + lean * 0.8);
-  const tipLeanX = Math.cos(tipBendAngle) * tipOffset;
-  const tipLeanZ = Math.sin(tipBendAngle) * tipOffset;
-  const bladeNormal = blendBladeNormal(angle, terrainNormal);
-
-  const verts = [
-    [px - dx, py, pz - dz, phase, 0],
-    [px + dx, py, pz + dz, phase, 0],
-    [px - midDx, py + height * 0.42, pz - midDz, phase, 0.42],
-    [px + midDx, py + height * 0.42, pz + midDz, phase, 0.42],
-    [px - upperDx + tipLeanX * 0.28, py + height * 0.76, pz - upperDz + tipLeanZ * 0.28, phase, 0.76],
-    [px + upperDx + tipLeanX * 0.28, py + height * 0.76, pz + upperDz + tipLeanZ * 0.28, phase, 0.76],
-    [px + tipLeanX, py + height, pz + tipLeanZ, phase, 1],
-  ] as const;
-
-  for (const vert of verts) {
-    positions.push(vert[0], vert[1], vert[2]);
-    normals.push(bladeNormal[0], bladeNormal[1], bladeNormal[2]);
-    uvs.push(vert[3], vert[4]);
-    tangents.push(1, 0, 0, 1);
-  }
-
-  indices.push(
-    vertexOffset + 0, vertexOffset + 1, vertexOffset + 2,
-    vertexOffset + 2, vertexOffset + 1, vertexOffset + 3,
-    vertexOffset + 2, vertexOffset + 3, vertexOffset + 4,
-    vertexOffset + 4, vertexOffset + 3, vertexOffset + 5,
-    vertexOffset + 4, vertexOffset + 5, vertexOffset + 6,
-  );
-
-  return vertexOffset + 7;
+  return vertexOffset + 5;
 }
 
 function blendBladeNormal(angle: number, terrainNormal: [number, number, number]): [number, number, number] {
-  const planeNormalX = -Math.sin(angle);
-  const planeNormalZ = Math.cos(angle);
+  const planeNormalX = Math.cos(angle);
+  const planeNormalZ = Math.sin(angle);
   return normalizeVec3([
-    planeNormalX * 0.62 + terrainNormal[0] * 0.24,
-    0.74 + terrainNormal[1] * 0.32,
-    planeNormalZ * 0.62 + terrainNormal[2] * 0.24,
+    planeNormalX * 0.76 + terrainNormal[0] * 0.2,
+    0.82 + terrainNormal[1] * 0.28,
+    planeNormalZ * 0.76 + terrainNormal[2] * 0.2,
   ]);
 }
 
@@ -273,6 +184,10 @@ function normalizeVec3(value: [number, number, number]): [number, number, number
   const length = Math.hypot(value[0], value[1], value[2]);
   if (length < 1e-5) return [0, 1, 0];
   return [value[0] / length, value[1] / length, value[2] / length];
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function isExcluded(worldX: number, worldZ: number, options: GrassFieldOptions): boolean {

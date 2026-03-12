@@ -49,59 +49,65 @@ struct VertexOutput {
   @builtin(position) clipPos: vec4f,
   @location(0) worldPos: vec3f,
   @location(1) worldNormal: vec3f,
-  @location(2) bladeUv: vec2f,
+  @location(2) fieldUv: vec2f,
+  @location(3) bladeData: vec3f,
 };
 
-fn bladeWind(worldXZ: vec2f, phase: f32, heightFactor: f32) -> vec2f {
-  let time = grass.wind.w * grass.wind.z;
-  let sway = smoothstep(0.0, 1.0, heightFactor);
-  let gustA = sin(worldXZ.x * grass.wind.y + phase * 7.0 + time);
-  let gustB = cos(worldXZ.y * grass.wind.y * 0.82 - phase * 5.0 + time * 0.78);
-  let gustC = sin((worldXZ.x + worldXZ.y) * grass.shading.z * 0.22 + time * 0.48);
-  let bend = grass.wind.x * sway * sway * (gustA * 0.52 + gustB * 0.31 + gustC * 0.17);
-  return vec2f(bend, bend * 0.28 + gustB * grass.wind.x * 0.08 * sway);
+fn fieldPattern(uv: vec2f) -> f32 {
+  let fieldFreq = 4.0 + grass.shading.z * 80.0;
+  let broad = sin(uv.x * fieldFreq * 1.15 + uv.y * fieldFreq * 0.28);
+  let streak = cos(uv.y * fieldFreq * 2.1 - uv.x * fieldFreq * 0.48);
+  let patch = sin((uv.x + uv.y * 0.62) * fieldFreq * 0.52);
+  return clamp(broad * 0.24 + streak * 0.18 + patch * 0.12 + 0.5, 0.0, 1.0);
+}
+
+fn cloudShadow(uv: vec2f) -> f32 {
+  let t = grass.wind.w * 0.02;
+  let cloudFreq = 1.0 + grass.shading.z * 18.0;
+  let drift = sin((uv.x + t) * cloudFreq * 1.2) * cos((uv.y - t * 0.6) * cloudFreq);
+  return clamp(drift * 0.5 + 0.5, 0.0, 1.0);
 }
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
   var out: VertexOutput;
   var localPos = in.position;
-  let rootWorld = object.model * vec4f(vec3f(in.position.x, 0.0, in.position.z), 1.0);
-  let offset = bladeWind(rootWorld.xz, in.uv.x, clamp(in.uv.y, 0.0, 1.0));
-  localPos.x += offset.x;
-  localPos.z += offset.y;
-  localPos.y -= length(offset) * 0.06 * in.uv.y;
+  let swayWeight = clamp(in.tangent.x, 0.0, 1.0);
+  let phase = in.tangent.y;
+  let bladeRandom = in.tangent.z;
+  let time = grass.wind.w * grass.wind.z;
+  let windFreq = 6.0 + grass.wind.y * 120.0;
+  let waveA = sin((in.uv.x * windFreq * 1.6 + in.uv.y * windFreq) + phase * 6.28318 + time);
+  let waveB = cos((in.uv.x * windFreq * 0.72 - in.uv.y * windFreq * 1.14) + bladeRandom * 5.0 + time * 0.72);
+  let displacement = (waveA * 0.72 + waveB * 0.28) * grass.wind.x * swayWeight;
+  localPos.x += displacement;
+  localPos.z += displacement * 0.32;
+  localPos.y -= abs(displacement) * 0.04 * swayWeight;
 
   let worldPos = object.model * vec4f(localPos, 1.0);
   out.clipPos = camera.viewProjection * worldPos;
   out.worldPos = worldPos.xyz;
   out.worldNormal = normalize((object.normalMatrix * vec4f(in.normal, 0.0)).xyz);
-  out.bladeUv = in.uv;
+  out.fieldUv = in.uv;
+  out.bladeData = vec3f(swayWeight, phase, bladeRandom);
   return out;
-}
-
-fn patchNoise(pos: vec2f) -> f32 {
-  let broad = sin(pos.x * grass.shading.z * 0.42 + grass.wind.w * 0.03) * cos(pos.y * grass.shading.z * 0.29 - grass.wind.w * 0.02);
-  let detail = sin((pos.x + pos.y) * grass.shading.z * 0.71);
-  return clamp(broad * 0.38 + detail * 0.12 + 0.5, 0.0, 1.0);
 }
 
 @fragment
 fn fs_main(in: VertexOutput, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
   let N = normalize(select(-in.worldNormal, in.worldNormal, frontFacing));
   let L = normalize(-light.dirDirection);
-  let V = normalize(camera.position - in.worldPos);
+  let heightT = clamp(in.bladeData.x, 0.0, 1.0);
   let halfLambert = clamp(dot(N, L) * 0.5 + 0.5, 0.0, 1.0);
-  let rim = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.0);
   let translucency = max(dot(-N, L), 0.0) * grass.shading.y;
-  let patchMask = patchNoise(in.worldPos.xz);
-  let heightT = smoothstep(0.0, 1.0, in.bladeUv.y);
-  let patchTint = mix(vec3f(0.94, 0.98, 0.9), vec3f(1.06, 1.05, 0.96), patchMask);
-  let base = grass.baseColor.rgb * mix(0.9, 0.98, heightT);
-  let tip = grass.tipColor.rgb * mix(0.96, 1.04, patchMask);
-  var color = mix(base, tip * patchTint, smoothstep(0.12, 1.0, heightT));
-  color *= mix(0.9, 1.04, patchMask);
-  color = mix(color * 0.92, tip * patchTint, smoothstep(0.68, 1.0, heightT) * 0.24);
-  let lighting = grass.shading.x + halfLambert * 0.58 + translucency * 0.24 + rim * 0.04;
-  return vec4f(color * lighting * light.dirColor * light.dirIntensity * 0.16 + color * light.ambient, 1.0);
+  let patchMask = fieldPattern(in.fieldUv);
+  let shadowMask = cloudShadow(in.fieldUv);
+  let clarity = mix(0.58, 1.0, heightT);
+  let fieldTint = mix(vec3f(0.84, 0.98, 0.88), vec3f(1.1, 1.08, 0.94), patchMask);
+  let cloudTint = mix(0.88, 1.06, shadowMask);
+  let base = mix(grass.baseColor.rgb, grass.tipColor.rgb, heightT);
+  var color = base * fieldTint * cloudTint;
+  color *= mix(0.92, 1.06, in.bladeData.z);
+  let lighting = grass.shading.x + halfLambert * 0.44 + translucency * 0.18;
+  return vec4f(color * clarity * lighting * light.dirColor * light.dirIntensity * 0.16 + color * light.ambient, 1.0);
 }
