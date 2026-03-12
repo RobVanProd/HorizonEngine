@@ -5,6 +5,7 @@ export interface SceneContextLoopOptions {
   intervalMs?: number;
   layoutGridSize?: number;
   layoutLimit?: number;
+  captureTopViewportInLoop?: boolean;
 }
 
 export interface SceneContextViewportCapture {
@@ -58,13 +59,14 @@ export class SceneContextLoop {
       intervalMs: options.intervalMs ?? 2500,
       layoutGridSize: options.layoutGridSize ?? 16,
       layoutLimit: options.layoutLimit ?? 8000,
+      captureTopViewportInLoop: options.captureTopViewportInLoop ?? false,
     };
   }
 
   start(): void {
     if (this._timer !== null || typeof window === 'undefined') return;
     this._timer = window.setInterval(() => {
-      void this.captureNow();
+      void this.captureNow({ includeTopViewport: this.options.captureTopViewportInLoop });
     }, this.options.intervalMs);
   }
 
@@ -100,16 +102,20 @@ export class SceneContextLoop {
       {
         action: 'engine.captureSceneContext',
         description: 'Capture fresh viewport and layout context for AI reasoning right now.',
-        params: {},
+        params: {
+          includeTopViewport: { type: 'boolean', description: 'Whether to also capture a real top-down viewport image. This temporarily changes the camera while capturing.', default: false },
+        },
       },
-      async () => ({
+      async (params) => ({
         ok: true,
-        data: await this.captureNow(),
+        data: await this.captureNow({
+          includeTopViewport: Boolean(params['includeTopViewport'] ?? false),
+        }),
       }),
     );
   }
 
-  async captureNow(): Promise<SceneContextSnapshot | null> {
+  async captureNow(options: { includeTopViewport?: boolean } = {}): Promise<SceneContextSnapshot | null> {
     if (this._capturing) return this._latest;
     this._capturing = true;
     try {
@@ -132,7 +138,7 @@ export class SceneContextLoop {
       }
 
       let topViewport: SceneContextViewportCapture | null = null;
-      if (layout?.bounds) {
+      if (options.includeTopViewport && layout?.bounds) {
         const centerX = (layout.bounds.min[0] + layout.bounds.max[0]) * 0.5;
         const centerZ = (layout.bounds.min[1] + layout.bounds.max[1]) * 0.5;
         const orthoSize = Math.max(
