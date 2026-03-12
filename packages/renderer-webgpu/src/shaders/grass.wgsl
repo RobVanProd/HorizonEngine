@@ -54,11 +54,12 @@ struct VertexOutput {
 
 fn bladeWind(worldXZ: vec2f, phase: f32, heightFactor: f32) -> vec2f {
   let time = grass.wind.w * grass.wind.z;
+  let sway = smoothstep(0.0, 1.0, heightFactor);
   let gustA = sin(worldXZ.x * grass.wind.y + phase * 7.0 + time);
-  let gustB = cos(worldXZ.y * grass.wind.y * 0.78 - phase * 5.0 + time * 0.82);
-  let gustC = sin((worldXZ.x + worldXZ.y) * grass.shading.z * 0.45 + time * 0.55);
-  let bend = grass.wind.x * heightFactor * heightFactor * (gustA * 0.55 + gustB * 0.3 + gustC * 0.15);
-  return vec2f(bend, bend * 0.45);
+  let gustB = cos(worldXZ.y * grass.wind.y * 0.82 - phase * 5.0 + time * 0.78);
+  let gustC = sin((worldXZ.x + worldXZ.y) * grass.shading.z * 0.22 + time * 0.48);
+  let bend = grass.wind.x * sway * sway * (gustA * 0.52 + gustB * 0.31 + gustC * 0.17);
+  return vec2f(bend, bend * 0.28 + gustB * grass.wind.x * 0.08 * sway);
 }
 
 @vertex
@@ -80,9 +81,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 }
 
 fn patchNoise(pos: vec2f) -> f32 {
-  let n = sin(pos.x * grass.shading.z + pos.y * grass.shading.z * 0.73 + grass.wind.w * 0.09);
-  let m = cos(pos.y * grass.shading.z * 0.61 - pos.x * grass.shading.z * 0.37);
-  return n * m * 0.5 + 0.5;
+  let broad = sin(pos.x * grass.shading.z * 0.42 + grass.wind.w * 0.03) * cos(pos.y * grass.shading.z * 0.29 - grass.wind.w * 0.02);
+  let detail = sin((pos.x + pos.y) * grass.shading.z * 0.71);
+  return clamp(broad * 0.38 + detail * 0.12 + 0.5, 0.0, 1.0);
 }
 
 @fragment
@@ -93,12 +94,14 @@ fn fs_main(in: VertexOutput, @builtin(front_facing) frontFacing: bool) -> @locat
   let halfLambert = clamp(dot(N, L) * 0.5 + 0.5, 0.0, 1.0);
   let rim = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.0);
   let translucency = max(dot(-N, L), 0.0) * grass.shading.y;
-  let patchMask = mix(0.82, 1.14, patchNoise(in.worldPos.xz));
+  let patchMask = patchNoise(in.worldPos.xz);
   let heightT = smoothstep(0.0, 1.0, in.bladeUv.y);
-  let base = grass.baseColor.rgb * mix(0.76, 0.92, heightT);
-  let tip = grass.tipColor.rgb * mix(0.94, 1.1, patchMask);
-  var color = mix(base, tip, heightT);
-  color *= mix(0.72, 1.0, patchMask);
-  let lighting = grass.shading.x + halfLambert * 0.82 + translucency * 0.45 + rim * 0.08;
+  let patchTint = mix(vec3f(0.94, 0.98, 0.9), vec3f(1.06, 1.05, 0.96), patchMask);
+  let base = grass.baseColor.rgb * mix(0.9, 0.98, heightT);
+  let tip = grass.tipColor.rgb * mix(0.96, 1.04, patchMask);
+  var color = mix(base, tip * patchTint, smoothstep(0.12, 1.0, heightT));
+  color *= mix(0.9, 1.04, patchMask);
+  color = mix(color * 0.92, tip * patchTint, smoothstep(0.68, 1.0, heightT) * 0.24);
+  let lighting = grass.shading.x + halfLambert * 0.58 + translucency * 0.24 + rim * 0.04;
   return vec4f(color * lighting * light.dirColor * light.dirIntensity * 0.16 + color * light.ambient, 1.0);
 }

@@ -79,7 +79,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 - The editor demo now resolves levels through a small level-definition contract instead of directly hardcoding one scene path.
 - `first-nature-expedition` is the current procedural first level: seeded terrain, a spline-guided trail, explicit meadow clearings, a localized spring/lake water surface, and a collectible route layered on top.
 - The renderer environment config now supports choosing a procedural background sky independently from the lighting probe, so HDR reflections do not force a photographic skybox.
-- The renderer now includes a dedicated stylized grass material path for merged blade fields with wind animation, root-to-tip color grading, and double-sided foliage shading.
+- The renderer now includes a dedicated stylized grass material path for merged blade fields with wind animation, broad field-scale color variation, and thinner tapered blade profiles that read more like a meadow surface than sparse prop scatter.
 - The world runtime exposes reusable scatter exclusions (`avoidSpline`, `avoidCircles`) so levels can keep trails and landmarks readable without special-case scene code.
 - The world runtime also exposes water placement controls (`waterScaleX`, `waterScaleZ`, offsets, and material overrides) so a level can ask for a pond, spring, or broad sheet instead of only a full-terrain plane.
 - The gameplay layer now includes a reusable quest-chain helper for authored step progression, story text, HUD updates, and objective-gated marker visibility. The current slice uses it for camp discovery, seed recovery, shrine restoration, and overlook completion.

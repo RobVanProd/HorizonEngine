@@ -486,17 +486,17 @@ async function loadNaturePackDemo(
 
   const grassField = buildStylizedGrassMesh(heightfield, {
     seed: FIRST_LEVEL_SEED ^ 0x9e3779b9,
-    density: 0.82,
-    bladesPerCell: 5,
-    minBladeHeight: 0.78,
-    maxBladeHeight: 1.85,
-    bladeWidth: 0.42,
+    density: 0.96,
+    bladesPerCell: 8,
+    minBladeHeight: 0.52,
+    maxBladeHeight: 1.18,
+    bladeWidth: 0.16,
     allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
     minNormalizedHeight: 0.05,
     maxNormalizedHeight: 0.62,
-    maxSlope: 0.09,
+    maxSlope: 0.11,
     avoidSpline: firstLevelTrail,
-    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.62,
+    avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.58,
     avoidCircles: firstLevelClearings.map((clearing) => ({
       centerX: clearing.centerX,
       centerZ: clearing.centerZ,
@@ -507,14 +507,14 @@ async function loadNaturePackDemo(
     const grassMeshHandle = engine.registerMesh(GPUMesh.create(device, grassField));
     const grassMaterialHandle = nextGrassMaterialHandle++;
     demoGrassMaterials.set(grassMaterialHandle, engine.pbrRenderer.createGrassMaterial({
-      baseColor: [0.16, 0.34, 0.12],
-      tipColor: [0.74, 0.9, 0.4],
-      windStrength: 0.22,
-      windScale: 0.075,
-      windSpeed: 0.95,
-      ambientStrength: 0.48,
-      translucency: 0.3,
-      patchScale: 0.1,
+      baseColor: [0.24, 0.46, 0.17],
+      tipColor: [0.72, 0.88, 0.42],
+      windStrength: 0.18,
+      windScale: 0.062,
+      windSpeed: 0.84,
+      ambientStrength: 0.52,
+      translucency: 0.2,
+      patchScale: 0.07,
     }));
     const grassEntity = engine.world.spawn();
     grassEntity.add(LocalTransform, {
