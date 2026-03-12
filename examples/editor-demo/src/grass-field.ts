@@ -17,6 +17,8 @@ export interface GrassFieldOptions {
   minBladeHeight: number;
   maxBladeHeight: number;
   bladeWidth: number;
+  profile?: 'blade' | 'coverage';
+  clusterRadiusMultiplier?: number;
   allowedBiomes?: number[];
   minNormalizedHeight?: number;
   maxNormalizedHeight?: number;
@@ -53,7 +55,7 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
 
       const cellCenterX = heightfield.originX + (x + 0.5) * heightfield.cellSize;
       const cellCenterZ = heightfield.originZ + (z + 0.5) * heightfield.cellSize;
-      const clusterRadius = heightfield.cellSize * 0.5;
+      const clusterRadius = heightfield.cellSize * (options.clusterRadiusMultiplier ?? 0.5);
       const bladeCount = Math.max(
         8,
         Math.round(options.bladesPerCell * (1.12 + (((cellSeed >>> 20) & 0xff) / 255) * 1.36)),
@@ -76,24 +78,42 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
         const tipBend = ((((bladeSeed >>> 5) ^ 0x7f4a7c15) & 0xffff) / 0xffff) * Math.PI * 2;
         const lean = 0.07 + (((bladeSeed >>> 15) & 0xff) / 255) * 0.14;
 
-        vertexOffset = appendBlade(
-          positions,
-          normals,
-          uvs,
-          tangents,
-          indices,
-          vertexOffset,
-          px,
-          py,
-          pz,
-          width,
-          bladeHeight,
-          angle,
-          tipBend,
-          phase,
-          lean,
-          normal,
-        );
+        vertexOffset = options.profile === 'coverage'
+          ? appendCoveragePatch(
+              positions,
+              normals,
+              uvs,
+              tangents,
+              indices,
+              vertexOffset,
+              px,
+              py,
+              pz,
+              width,
+              bladeHeight,
+              angle,
+              tipBend,
+              phase,
+              normal,
+            )
+          : appendBlade(
+              positions,
+              normals,
+              uvs,
+              tangents,
+              indices,
+              vertexOffset,
+              px,
+              py,
+              pz,
+              width,
+              bladeHeight,
+              angle,
+              tipBend,
+              phase,
+              lean,
+              normal,
+            );
       }
     }
   }
@@ -105,6 +125,81 @@ export function buildStylizedGrassMesh(heightfield: Heightfield, options: GrassF
     tangents: new Float32Array(tangents),
     indices: new Uint32Array(indices),
   };
+}
+
+function appendCoveragePatch(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  tangents: number[],
+  indices: number[],
+  vertexOffset: number,
+  px: number,
+  py: number,
+  pz: number,
+  width: number,
+  height: number,
+  angle: number,
+  tipBendAngle: number,
+  phase: number,
+  terrainNormal: [number, number, number],
+): number {
+  let nextOffset = vertexOffset;
+  nextOffset = appendCoverageCard(
+    positions, normals, uvs, tangents, indices, nextOffset,
+    px, py, pz, width * 1.35, height, angle, tipBendAngle, phase, terrainNormal,
+  );
+  nextOffset = appendCoverageCard(
+    positions, normals, uvs, tangents, indices, nextOffset,
+    px, py, pz, width * 1.2, height * 0.94, angle + Math.PI * 0.5, tipBendAngle + Math.PI * 0.25, phase * 0.8 + 0.11, terrainNormal,
+  );
+  return nextOffset;
+}
+
+function appendCoverageCard(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  tangents: number[],
+  indices: number[],
+  vertexOffset: number,
+  px: number,
+  py: number,
+  pz: number,
+  width: number,
+  height: number,
+  angle: number,
+  tipBendAngle: number,
+  phase: number,
+  terrainNormal: [number, number, number],
+): number {
+  const dx = Math.cos(angle) * width * 0.5;
+  const dz = Math.sin(angle) * width * 0.5;
+  const tipOffset = width * 0.26;
+  const tipLeanX = Math.cos(tipBendAngle) * tipOffset;
+  const tipLeanZ = Math.sin(tipBendAngle) * tipOffset;
+  const bladeNormal = blendBladeNormal(angle, terrainNormal);
+
+  const verts = [
+    [px - dx, py, pz - dz, phase, 0],
+    [px + dx, py, pz + dz, phase, 0],
+    [px - dx * 0.32 + tipLeanX, py + height, pz - dz * 0.32 + tipLeanZ, phase, 1],
+    [px + dx * 0.32 + tipLeanX, py + height, pz + dz * 0.32 + tipLeanZ, phase, 1],
+  ] as const;
+
+  for (const vert of verts) {
+    positions.push(vert[0], vert[1], vert[2]);
+    normals.push(bladeNormal[0], bladeNormal[1], bladeNormal[2]);
+    uvs.push(vert[3], vert[4]);
+    tangents.push(1, 0, 0, 1);
+  }
+
+  indices.push(
+    vertexOffset + 0, vertexOffset + 1, vertexOffset + 2,
+    vertexOffset + 2, vertexOffset + 1, vertexOffset + 3,
+  );
+
+  return vertexOffset + 4;
 }
 
 function appendBlade(
