@@ -134,6 +134,7 @@ export class PBRRenderer {
   private _initialized = false;
   private _gpuProfiler: GpuProfiler | null = null;
   private _profilingEnabled = false;
+  private _cameraPosition: [number, number, number] = [0, 0, 0];
 
   constructor(gpu: GPUContext) {
     this._gpu = gpu;
@@ -483,6 +484,7 @@ export class PBRRenderer {
   }
 
   setCamera(viewProjection: Float32Array, position: [number, number, number]): void {
+    this._cameraPosition = [position[0], position[1], position[2]];
     const data = new Float32Array(40);
     data.set(viewProjection, 0);
     data.set(mat4Inverse(viewProjection), 16);
@@ -502,7 +504,7 @@ export class PBRRenderer {
     d[8] = lighting.ambient[0]; d[9] = lighting.ambient[1]; d[10] = lighting.ambient[2];
     d[11] = this._shadowMap ? 1.0 : 0.0;
     if (this._shadowMap) {
-      this._shadowMap.updateLightDirection(lighting.direction);
+      this._shadowMap.updateLightDirection(lighting.direction, [0, 0, 0], this._cameraPosition);
       d.set(this._shadowMap.lightViewProj, 12);
     }
     d[28] = lighting.envIntensity;

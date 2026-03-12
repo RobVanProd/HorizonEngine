@@ -35,6 +35,7 @@ const MAX_POINT_LIGHTS = 4;
 export class PBRRenderer {
     _gpu;
     _pipeline;
+    _doubleSidedPipeline;
     _skyboxPipeline;
     _depthTexture;
     _depthView;
@@ -49,6 +50,7 @@ export class PBRRenderer {
     _shadowMap = null;
     _skyboxBindGroup = null;
     _skinnedPipeline;
+    _doubleSidedSkinnedPipeline;
     _skinnedObjectLayout;
     _jointBuffers = [];
     _skinnedObjectBindGroups = [];
@@ -75,6 +77,7 @@ export class PBRRenderer {
     _initialized = false;
     _gpuProfiler = null;
     _profilingEnabled = false;
+    _cameraPosition = [0, 0, 0];
     constructor(gpu) {
         this._gpu = gpu;
     }
@@ -189,6 +192,15 @@ export class PBRRenderer {
             primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
             depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
         });
+        this._doubleSidedPipeline = device.createRenderPipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [cameraLayout, lightLayout, this._materialLayout, objectLayout],
+            }),
+            vertex: { module: pbrModule, entryPoint: 'vs_main', buffers: [PBR_VERTEX_LAYOUT] },
+            fragment: { module: pbrModule, entryPoint: 'fs_main', targets: [{ format }] },
+            primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'ccw' },
+            depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+        });
         const skyboxModule = device.createShaderModule({ code: skyboxShaderSource });
         const skyboxCameraLayout = device.createBindGroupLayout({
             entries: [
@@ -227,6 +239,15 @@ export class PBRRenderer {
             vertex: { module: skinnedModule, entryPoint: 'vs_main', buffers: [PBR_SKINNED_VERTEX_LAYOUT] },
             fragment: { module: skinnedModule, entryPoint: 'fs_main', targets: [{ format }] },
             primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
+            depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+        });
+        this._doubleSidedSkinnedPipeline = device.createRenderPipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [cameraLayout, lightLayout, this._materialLayout, this._skinnedObjectLayout],
+            }),
+            vertex: { module: skinnedModule, entryPoint: 'vs_main', buffers: [PBR_SKINNED_VERTEX_LAYOUT] },
+            fragment: { module: skinnedModule, entryPoint: 'fs_main', targets: [{ format }] },
+            primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'ccw' },
             depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
         });
         for (let i = 0; i < MAX_OBJECTS; i++) {
@@ -363,6 +384,7 @@ export class PBRRenderer {
         this._gpu.device.queue.writeBuffer(this._grassObjectBuffers[idx], 0, data);
     }
     setCamera(viewProjection, position) {
+        this._cameraPosition = [position[0], position[1], position[2]];
         const data = new Float32Array(40);
         data.set(viewProjection, 0);
         data.set(mat4Inverse(viewProjection), 16);
@@ -388,7 +410,7 @@ export class PBRRenderer {
         d[10] = lighting.ambient[2];
         d[11] = this._shadowMap ? 1.0 : 0.0;
         if (this._shadowMap) {
-            this._shadowMap.updateLightDirection(lighting.direction);
+            this._shadowMap.updateLightDirection(lighting.direction, [0, 0, 0], this._cameraPosition);
             d.set(this._shadowMap.lightViewProj, 12);
         }
         d[28] = lighting.envIntensity;
@@ -501,14 +523,15 @@ export class PBRRenderer {
         pass.setBindGroup(0, this._cameraBindGroup);
         pass.setBindGroup(1, this._lightBindGroup);
         // Static objects
-        let hasStatic = false;
+        let currentStaticPipeline = null;
         for (let i = 0; i < this._draws.length; i++) {
             const dc = this._draws[i];
             if (dc.skinned)
                 continue;
-            if (!hasStatic) {
-                pass.setPipeline(this._pipeline);
-                hasStatic = true;
+            const pipeline = dc.material.doubleSided ? this._doubleSidedPipeline : this._pipeline;
+            if (currentStaticPipeline !== pipeline) {
+                pass.setPipeline(pipeline);
+                currentStaticPipeline = pipeline;
             }
             pass.setBindGroup(2, dc.material.bindGroup);
             pass.setBindGroup(3, this._objectBindGroups[i]);
@@ -517,14 +540,15 @@ export class PBRRenderer {
             pass.drawIndexed(dc.mesh.indexCount);
         }
         // Skinned objects
-        let hasSkinned = false;
+        let currentSkinnedPipeline = null;
         for (let i = 0; i < this._draws.length; i++) {
             const dc = this._draws[i];
             if (!dc.skinned)
                 continue;
-            if (!hasSkinned) {
-                pass.setPipeline(this._skinnedPipeline);
-                hasSkinned = true;
+            const pipeline = dc.material.doubleSided ? this._doubleSidedSkinnedPipeline : this._skinnedPipeline;
+            if (currentSkinnedPipeline !== pipeline) {
+                pass.setPipeline(pipeline);
+                currentSkinnedPipeline = pipeline;
             }
             pass.setBindGroup(2, dc.material.bindGroup);
             pass.setBindGroup(3, this._skinnedObjectBindGroups[i]);

@@ -82,6 +82,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 - The renderer now includes a dedicated stylized grass material path for merged blade fields with wind animation, field-space color variation, and a dense 5-vertex blade layout inspired by the Three.js grass demo approach; the first level now pushes that path to very high meadow coverage instead of sparse prop density.
 - The procedural visible sky now targets a cleaner blue outdoor look and supports engine-side sun-aware cloud shaping in the generated sky cubemap, so outdoor scenes no longer need to rely on a photographic backdrop.
 - The WebGPU bootstrap now requests the adapter's higher `maxBufferSize` limit when available, which keeps large merged showcase meshes such as dense meadow fields from failing on the default 256 MB device limit.
+- Directional shadows now follow and stabilize around the active camera focus instead of a fixed origin-centered light box, which keeps outdoor shadow coverage usable across the playable area instead of only in the middle of the map.
 - The AI/editor integration now exposes `editor.captureViewport` for direct viewport PNG capture with optional temporary camera overrides or presets, and `scene.layoutSummary` for a compact top-down occupancy/landmark summary, which gives engine-facing agents much better scene context than raw entity lists alone.
 - The AI package now also includes a reusable `SceneContextLoop`, which automatically records the latest live viewport capture, a generated occupancy map, and the matching `scene.layoutSummary` payload behind `engine.getSceneContext` / `engine.captureSceneContext`. Real top-down viewport capture remains available on demand so the background loop does not visibly disturb the editor camera.
 - The assets package now bridges `@dgreenheck/ez-tree` into engine-native meshes and materials, and the editor exposes those presets as draggable procedural tree assets plus an `editor.addProceduralTree` command so teams can opt into generated trees instead of authored tree packs.
@@ -124,6 +125,8 @@ Contributions are welcome. See `CONTRIBUTING.md` for development workflow and ex
 - **Phase 8** — Procedural world foundations, VFX core, lighting, geometry scalability ✓
 - **Phase 9** — Play mode: first-person exploration (WASD + mouse look, pointer lock) ✓
 - **Phase 10** — Game demo: collectible exploration, play HUD, ship with engine *(current)*
+
+Detailed next-program planning and progress tracking now live in [docs/roadmap/phase-next.md](./docs/roadmap/phase-next.md).
 
 ## Internal Design Mantra
 

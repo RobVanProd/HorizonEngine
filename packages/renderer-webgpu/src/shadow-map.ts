@@ -12,6 +12,8 @@ export interface ShadowConfig {
   frustumSize?: number;
   near?: number;
   far?: number;
+  followCamera?: boolean;
+  stabilize?: boolean;
 }
 
 export class ShadowMap {
@@ -32,6 +34,8 @@ export class ShadowMap {
   private _frustumSize: number;
   private _near: number;
   private _far: number;
+  private _followCamera: boolean;
+  private _stabilize: boolean;
 
   constructor(device: GPUDevice, config: ShadowConfig = {}) {
     this._device = device;
@@ -39,6 +43,8 @@ export class ShadowMap {
     this._frustumSize = config.frustumSize ?? 60;
     this._near = config.near ?? 0.1;
     this._far = config.far ?? 150;
+    this._followCamera = config.followCamera ?? true;
+    this._stabilize = config.stabilize ?? true;
 
     this.texture = device.createTexture({
       size: [this.resolution, this.resolution],
@@ -122,28 +128,52 @@ export class ShadowMap {
 
   /**
    * Update the light view-projection matrix from light direction.
-   * The light looks toward the origin from the given direction.
+   * The light looks toward either the active camera focus or the supplied target.
    */
-  updateLightDirection(direction: [number, number, number], target: [number, number, number] = [0, 0, 0]): void {
+  updateLightDirection(
+    direction: [number, number, number],
+    target: [number, number, number] = [0, 0, 0],
+    cameraPosition?: [number, number, number],
+  ): void {
     const len = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2) || 1;
     const nx = direction[0] / len;
     const ny = direction[1] / len;
     const nz = direction[2] / len;
 
+    const focus = this._resolveTarget(target, cameraPosition);
+
     const dist = this._far * 0.5;
     const eye: [number, number, number] = [
-      target[0] - nx * dist,
-      target[1] - ny * dist,
-      target[2] - nz * dist,
+      focus[0] - nx * dist,
+      focus[1] - ny * dist,
+      focus[2] - nz * dist,
     ];
 
     const s = this._frustumSize;
     const proj = mat4Ortho(-s, s, -s, s, this._near, this._far);
-    const view = mat4LookAt(eye, target, [0, 1, 0]);
+    const view = mat4LookAt(eye, focus, [0, 1, 0]);
     const vp = mat4Multiply(proj, view);
 
     this.lightViewProj.set(vp);
     this._device.queue.writeBuffer(this._lightVPBuffer, 0, vp as Float32Array<ArrayBuffer>);
+  }
+
+  private _resolveTarget(
+    fallbackTarget: [number, number, number],
+    cameraPosition?: [number, number, number],
+  ): [number, number, number] {
+    const base: [number, number, number] =
+      this._followCamera && cameraPosition
+        ? [cameraPosition[0], Math.max(0, cameraPosition[1] - 1.5), cameraPosition[2]]
+        : [fallbackTarget[0], fallbackTarget[1], fallbackTarget[2]];
+
+    if (!this._stabilize) {
+      return base;
+    }
+
+    const texelWorldSize = (this._frustumSize * 2) / this.resolution;
+    const snap = (value: number) => Math.round(value / texelWorldSize) * texelWorldSize;
+    return [snap(base[0]), snap(base[1]), snap(base[2])];
   }
 
   /**
