@@ -33,11 +33,13 @@ Current foundation:
 - `engine.getSceneContext` / `engine.captureSceneContext`
 - `SceneContextLoop`
 - Editor-side procedural tree commands
+- AI Control Plane v0 design spec in `docs/architecture/ai-control-plane-v0.md`
 
 Next milestones:
 
-- Expand read APIs for visibility, materials, terrain regions, procedural zones, warnings, and undo state.
-- Formalize write APIs around bounded worldbuilding commands and previewable transactions.
+- Implement minimal v0 read APIs for entities, hierarchy, transforms, tags, and component names.
+- Implement minimal v0 write APIs for create, delete, rename, transform, and tag mutations.
+- Add preview, diff, validation, and editor-backed grouped undo execution for v0 action plans.
 - Add semantic primitives: biome, path, clearing, campsite, landmark, encounter zone, mood profile, weather preset.
 - Build a benchmark harness for atomic, scene-editing, multi-step, and debugging tasks.
 
@@ -121,6 +123,7 @@ Completed groundwork already in the repo:
 - Procedural visible sky and improved water controls.
 - Quest-chain foundation for the first playable level.
 - Camera-following stabilized directional shadows for forest scenes.
+- AI Control Plane v0 architecture document and module plan.
 
 Open issues and immediate gaps:
 
