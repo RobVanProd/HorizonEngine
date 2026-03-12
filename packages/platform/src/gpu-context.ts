@@ -69,9 +69,15 @@ async function acquireAdapter(powerPreference?: GPUPowerPreference): Promise<GPU
 export async function createGPUContext(options: GPUContextOptions): Promise<GPUContext> {
   const adapter = await acquireAdapter(options.powerPreference);
 
+  const requiredLimits: Record<string, number> = { ...(options.requiredLimits ?? {}) };
+  const adapterMaxBufferSize = adapter.limits.maxBufferSize;
+  if (adapterMaxBufferSize > 268_435_456) {
+    requiredLimits.maxBufferSize = Math.max(requiredLimits.maxBufferSize ?? 0, adapterMaxBufferSize);
+  }
+
   const device = await adapter.requestDevice({
     requiredFeatures: options.requiredFeatures,
-    requiredLimits: options.requiredLimits,
+    requiredLimits,
   });
 
   device.lost.then((info) => {
