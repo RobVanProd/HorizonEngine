@@ -55,8 +55,8 @@ fn fieldPattern(uv: vec2f) -> f32 {
   let fieldFreq = 4.0 + grass.shading.z * 80.0;
   let broad = sin(uv.x * fieldFreq * 1.15 + uv.y * fieldFreq * 0.28);
   let streak = cos(uv.y * fieldFreq * 2.1 - uv.x * fieldFreq * 0.48);
-  let patch = sin((uv.x + uv.y * 0.62) * fieldFreq * 0.52);
-  return clamp(broad * 0.24 + streak * 0.18 + patch * 0.12 + 0.5, 0.0, 1.0);
+  let patchWave = sin((uv.x + uv.y * 0.62) * fieldFreq * 0.52);
+  return clamp(broad * 0.24 + streak * 0.18 + patchWave * 0.12 + 0.5, 0.0, 1.0);
 }
 
 fn cloudShadow(uv: vec2f) -> f32 {
