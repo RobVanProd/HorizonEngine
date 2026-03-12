@@ -34,12 +34,14 @@ Current foundation:
 - `SceneContextLoop`
 - Editor-side procedural tree commands
 - AI Control Plane v0 design spec in `docs/architecture/ai-control-plane-v0.md`
+- AI Control Plane v0 minimal implementation: `scene.read.entities`, `scene.read.entity`, `scene.previewPlan`, `scene.applyPlan`
+- Editor-backed grouped undo for v0 create, rename, and transform plans
 
 Next milestones:
 
-- Implement minimal v0 read APIs for entities, hierarchy, transforms, tags, and component names.
-- Implement minimal v0 write APIs for create, delete, rename, transform, and tag mutations.
-- Add preview, diff, validation, and editor-backed grouped undo execution for v0 action plans.
+- Expand read APIs to include selection and explicit capabilities reporting.
+- Extend v0 write coverage from create/rename/transform to delete and tag mutations.
+- Improve snapshot/diff coverage for hierarchy-aware creation and future semantic actions.
 - Add semantic primitives: biome, path, clearing, campsite, landmark, encounter zone, mood profile, weather preset.
 - Build a benchmark harness for atomic, scene-editing, multi-step, and debugging tasks.
 
@@ -124,6 +126,7 @@ Completed groundwork already in the repo:
 - Quest-chain foundation for the first playable level.
 - Camera-following stabilized directional shadows for forest scenes.
 - AI Control Plane v0 architecture document and module plan.
+- AI Control Plane v0 executable slice with structured preview/apply, validation, diffs, and editor undo integration for create/rename/transform.
 
 Open issues and immediate gaps:
 

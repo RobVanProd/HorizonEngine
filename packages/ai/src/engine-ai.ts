@@ -8,6 +8,7 @@ import { registerDebugCommands } from './debug-commands.js';
 import { registerWorldCommands } from './world-commands.js';
 import { registerVfxCommands } from './vfx-commands.js';
 import { registerGeometryCommands } from './geometry-commands.js';
+import { registerControlPlaneCommands } from './control-plane/control-plane-api.js';
 import { InferenceEngine } from './inference.js';
 import type { Command, CommandResult, CommandSchema, ToolDefinition, Transport } from './types.js';
 
@@ -123,6 +124,7 @@ export class EngineAI {
     registerWorldCommands(this.router, this.engine);
     registerVfxCommands(this.router, this.engine);
     registerGeometryCommands(this.router, this.engine);
+    registerControlPlaneCommands(this.router, this.engine);
 
     this.router.register(
       {

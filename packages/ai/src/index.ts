@@ -23,6 +23,13 @@ export {
 } from './inference-system.js';
 export { registerMLCommands } from './ml-commands.js';
 export { registerAdvancedCommands } from './advanced-commands.js';
+export { registerControlPlaneCommands, type ControlPlaneRegistrationOptions } from './control-plane/control-plane-api.js';
+export {
+  previewAiActionPlan,
+  applyAiActionPlan,
+  applyAiActionPlanWithUndoLog,
+  undoAiActionPlanExecution,
+} from './control-plane/plan-executor.js';
 export {
   SceneContextLoop,
   type SceneContextLoopOptions,
@@ -39,3 +46,22 @@ export type {
   ParamDef,
   Transport,
 } from './types.js';
+export type {
+  AiAction,
+  AiActionKind,
+  AiActionPlan,
+  AiIdRemap,
+  AiNormalizedAction,
+  AiNormalizedActionPlan,
+  AiPlanApplyResult,
+  AiPlanDiff,
+  AiPlanPreviewResult,
+  AiPlanSnapshotEntry,
+  AiPlanUndoBridge,
+  AiPlanValidationResult,
+  AiValidationIssue,
+  EntitySnapshot,
+  EntityTransformSnapshot,
+  SceneEntityDetail,
+  SceneEntitySummary,
+} from './control-plane/plan-types.js';

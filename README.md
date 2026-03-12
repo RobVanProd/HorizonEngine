@@ -71,6 +71,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 - Procedural world generation: terrain, splines, biomes, scatter rules, seed-based reproducibility
 - Particle effects with spline- and terrain-aware spawning
 - AI command APIs: scene (spawn, list, inspect, setLabel), world (terrain, spline, scatter), editor (viewport, overlays), VFX, geometry stats
+- AI Control Plane v0 slice: `scene.read.entities`, `scene.read.entity`, `scene.previewPlan`, and `scene.applyPlan` for safe create/rename/transform planning with structured validation, diffs, and editor-grouped undo
 - In-engine devtools plus a scene editor with hierarchy, properties, assets, viewport controls, and transform gizmos
 - Play mode with game demo: collect orbs, objective HUD, ships with engine
 

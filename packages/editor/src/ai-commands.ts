@@ -1,12 +1,17 @@
 import type { Editor } from './editor.js';
-import type { CommandRouter } from '@engine/ai';
+import { registerControlPlaneCommands, type CommandRouter } from '@engine/ai';
 import type { ViewportOverlayId } from './viewport/viewport.js';
 import type { ViewPreset } from './viewport/editor-camera.js';
+import { createEditorAiPlanUndoBridge } from './ai/ai-plan-undo.js';
 
 /**
  * Register editor-specific AI commands onto a CommandRouter.
  */
 export function registerEditorCommands(router: CommandRouter, editor: Editor): void {
+  registerControlPlaneCommands(router, editor.engine, {
+    undoBridge: createEditorAiPlanUndoBridge(editor.engine, editor.undoStack),
+  });
+
   router.register({
     action: 'editor.selectEntity',
     description: 'Select an entity by ID in the editor',
