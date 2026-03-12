@@ -93,12 +93,12 @@ fn fs_main(in: VertexOutput, @builtin(front_facing) frontFacing: bool) -> @locat
   let halfLambert = clamp(dot(N, L) * 0.5 + 0.5, 0.0, 1.0);
   let rim = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.0);
   let translucency = max(dot(-N, L), 0.0) * grass.shading.y;
-  let patch = mix(0.82, 1.14, patchNoise(in.worldPos.xz));
+  let patchMask = mix(0.82, 1.14, patchNoise(in.worldPos.xz));
   let heightT = smoothstep(0.0, 1.0, in.bladeUv.y);
   let base = grass.baseColor.rgb * mix(0.76, 0.92, heightT);
-  let tip = grass.tipColor.rgb * mix(0.94, 1.1, patch);
+  let tip = grass.tipColor.rgb * mix(0.94, 1.1, patchMask);
   var color = mix(base, tip, heightT);
-  color *= mix(0.72, 1.0, patch);
+  color *= mix(0.72, 1.0, patchMask);
   let lighting = grass.shading.x + halfLambert * 0.82 + translucency * 0.45 + rim * 0.08;
   return vec4f(color * lighting * light.dirColor * light.dirIntensity * 0.16 + color * light.ambient, 1.0);
 }
