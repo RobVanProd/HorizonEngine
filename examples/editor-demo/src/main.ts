@@ -21,6 +21,7 @@ import {
   loadGltfScene,
   loadHDR,
   loadTexture,
+  spawnProceduralTree,
   type SceneBounds,
 } from '@engine/assets';
 import { createAnimationSystem, type AnimationRegistries } from '@engine/animation';
@@ -34,7 +35,7 @@ import {
   type MeshData,
 } from '@engine/renderer-webgpu';
 import { EmitterFlags, ParticleEmitter, ParticleRenderer, getEffectsRuntime } from '@engine/effects';
-import { EngineAI } from '@engine/ai';
+import { EngineAI, SceneContextLoop } from '@engine/ai';
 import { Editor, registerEditorCommands } from '@engine/editor';
 import {
   BiomeId,
@@ -165,6 +166,12 @@ async function main() {
 
   const ai = EngineAI.attach(engine);
   registerEditorCommands(ai.router, editor);
+  const sceneContextLoop = new SceneContextLoop(ai, {
+    intervalMs: 2500,
+    layoutGridSize: 18,
+    layoutLimit: 9000,
+  });
+  sceneContextLoop.registerCommands(ai.router);
 
   engine.scheduler.removeSystemByLabel(Phase.RENDER, 'pbr-render');
   const rs = createRenderSystem(world, {
@@ -197,11 +204,14 @@ async function main() {
   engine.scheduler.addSystem(Phase.RENDER, rs.render, 'editor-render');
 
   engine.start();
+  void sceneContextLoop.captureNow();
+  sceneContextLoop.start();
 
   (window as Window & { editor?: Editor; engine?: Engine; ai?: EngineAI }).editor = editor;
   (window as Window & { editor?: Editor; engine?: Engine; ai?: EngineAI }).engine = engine;
   (window as Window & { editor?: Editor; engine?: Engine; ai?: EngineAI }).ai = ai;
   (window as Window & { effects?: unknown }).effects = effects;
+  (window as Window & { aiSceneContext?: SceneContextLoop }).aiSceneContext = sceneContextLoop;
 }
 
 async function loadPreferredDemoScene(
@@ -263,14 +273,6 @@ const NATURE_SCATTER_ASSETS: Array<{
   noiseThreshold?: number;
   noiseSeedOffset?: number;
 }> = [
-  // Trees: Forest + Plains (grassland), relaxed slope for rolling terrain
-  { file: 'CommonTree_1.gltf', density: 0.08, minScale: 0.85, maxScale: 1.35, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.8, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.54, noiseSeedOffset: 11 },
-  { file: 'CommonTree_2.gltf', density: 0.06, minScale: 0.9, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.8, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.56, noiseSeedOffset: 21 },
-  { file: 'Pine_1.gltf', density: 0.07, minScale: 0.8, maxScale: 1.25, allowedBiomes: [BiomeId.Forest, BiomeId.Plains, BiomeId.Alpine], minNormalizedHeight: 0.15, maxNormalizedHeight: 0.9, maxSlope: 0.14, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.52, noiseSeedOffset: 31 },
-  { file: 'Pine_2.gltf', density: 0.05, minScale: 0.85, maxScale: 1.15, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.75, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.55, noiseSeedOffset: 41 },
-  { file: 'TwistedTree_1.gltf', density: 0.008, minScale: 0.9, maxScale: 1.1, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.7, maxSlope: 0.1, occupationRadiusPixels: 5, noiseScale: 0.09, noiseThreshold: 0.62, noiseSeedOffset: 51 },
-  { file: 'CommonTree_3.gltf', density: 0.05, minScale: 0.85, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.75, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.55, noiseSeedOffset: 61 },
-  { file: 'Pine_3.gltf', density: 0.04, minScale: 0.8, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Alpine], minNormalizedHeight: 0.2, maxNormalizedHeight: 0.9, maxSlope: 0.15, occupationRadiusPixels: 5, noiseScale: 0.07, noiseThreshold: 0.53, noiseSeedOffset: 71 },
   // Rocks: higher elevation, rocky/snowy
   { file: 'Rock_Medium_1.gltf', density: 0.02, minScale: 0.6, maxScale: 1.4, allowedBiomes: [BiomeId.Alpine], minNormalizedHeight: 0.55, maxNormalizedHeight: 0.95, maxSlope: 0.4, occupationRadiusPixels: 4, noiseScale: 0.05, noiseThreshold: 0.5, noiseSeedOffset: 81 },
   { file: 'Rock_Medium_2.gltf', density: 0.015, minScale: 0.5, maxScale: 1.2, allowedBiomes: [BiomeId.Alpine], minNormalizedHeight: 0.5, maxNormalizedHeight: 0.9, maxSlope: 0.45, occupationRadiusPixels: 4, noiseScale: 0.05, noiseThreshold: 0.53, noiseSeedOffset: 91 },
@@ -280,6 +282,29 @@ const NATURE_SCATTER_ASSETS: Array<{
   { file: 'Fern_1.gltf', density: 0.06, minScale: 0.45, maxScale: 0.9, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.58, maxSlope: 0.08, occupationRadiusPixels: 1, noiseScale: 0.09, noiseThreshold: 0.54, noiseSeedOffset: 100 },
   // Grass: tighter meadow-style patches rather than isolated blades across the full terrain.
   { file: 'Grass_Common_Tall.gltf', density: 0.72, minScale: 0.2, maxScale: 0.42, allowedBiomes: [BiomeId.Plains], minNormalizedHeight: 0.08, maxNormalizedHeight: 0.46, maxSlope: 0.06, occupationRadiusPixels: 0, noiseScale: 0.065, noiseThreshold: 0.58, noiseSeedOffset: 200 },
+];
+
+const NATURE_PROCEDURAL_TREE_ASSETS: Array<{
+  preset: 'oak-medium' | 'oak-large' | 'aspen-medium' | 'ash-medium' | 'pine-medium' | 'pine-large';
+  density: number;
+  minScale: number;
+  maxScale: number;
+  allowedBiomes?: number[];
+  minNormalizedHeight?: number;
+  maxNormalizedHeight?: number;
+  minSlope?: number;
+  maxSlope?: number;
+  occupationRadiusPixels?: number;
+  noiseScale?: number;
+  noiseThreshold?: number;
+  noiseSeedOffset?: number;
+}> = [
+  { preset: 'oak-medium', density: 0.075, minScale: 0.84, maxScale: 1.22, allowedBiomes: [BiomeId.Forest, BiomeId.Plains], minNormalizedHeight: 0.12, maxNormalizedHeight: 0.78, maxSlope: 0.11, occupationRadiusPixels: 7, noiseScale: 0.08, noiseThreshold: 0.54, noiseSeedOffset: 301 },
+  { preset: 'oak-large', density: 0.028, minScale: 1.05, maxScale: 1.4, allowedBiomes: [BiomeId.Forest], minNormalizedHeight: 0.14, maxNormalizedHeight: 0.72, maxSlope: 0.1, occupationRadiusPixels: 8, noiseScale: 0.075, noiseThreshold: 0.57, noiseSeedOffset: 311 },
+  { preset: 'aspen-medium', density: 0.05, minScale: 0.85, maxScale: 1.18, allowedBiomes: [BiomeId.Plains, BiomeId.Forest], minNormalizedHeight: 0.1, maxNormalizedHeight: 0.72, maxSlope: 0.1, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.56, noiseSeedOffset: 321 },
+  { preset: 'ash-medium', density: 0.038, minScale: 0.82, maxScale: 1.15, allowedBiomes: [BiomeId.Forest], minNormalizedHeight: 0.15, maxNormalizedHeight: 0.74, maxSlope: 0.12, occupationRadiusPixels: 6, noiseScale: 0.08, noiseThreshold: 0.58, noiseSeedOffset: 331 },
+  { preset: 'pine-medium', density: 0.06, minScale: 0.86, maxScale: 1.2, allowedBiomes: [BiomeId.Forest, BiomeId.Plains, BiomeId.Alpine], minNormalizedHeight: 0.16, maxNormalizedHeight: 0.9, maxSlope: 0.14, occupationRadiusPixels: 6, noiseScale: 0.07, noiseThreshold: 0.52, noiseSeedOffset: 341 },
+  { preset: 'pine-large', density: 0.03, minScale: 1.02, maxScale: 1.38, allowedBiomes: [BiomeId.Forest, BiomeId.Alpine], minNormalizedHeight: 0.18, maxNormalizedHeight: 0.92, maxSlope: 0.15, occupationRadiusPixels: 7, noiseScale: 0.07, noiseThreshold: 0.55, noiseSeedOffset: 351 },
 ];
 
 interface LayoutCircle {
@@ -531,6 +556,42 @@ async function loadNaturePackDemo(
 
   const availableFiles = new Set(naturePackEntries.map((e) => e.file));
   let placedCount = 0;
+
+  for (const asset of NATURE_PROCEDURAL_TREE_ASSETS) {
+    const template = await spawnProceduralTree(device, engine, {
+      preset: asset.preset,
+      seed: hashSeed(`${asset.preset}:${asset.noiseSeedOffset ?? 0}`),
+      position: [0, 0, 0],
+      label: `EZ Tree Template ${asset.preset}`,
+    });
+
+    const instances = generateScatterInstances(heightfield, {
+      seed: hashSeed(asset.preset),
+      density: asset.density,
+      minScale: asset.minScale,
+      maxScale: asset.maxScale,
+      allowedBiomes: asset.allowedBiomes,
+      minNormalizedHeight: asset.minNormalizedHeight,
+      maxNormalizedHeight: asset.maxNormalizedHeight,
+      minSlope: asset.minSlope,
+      maxSlope: asset.maxSlope,
+      occupancy,
+      occupationRadiusPixels: asset.occupationRadiusPixels,
+      noiseScale: asset.noiseScale,
+      noiseThreshold: asset.noiseThreshold,
+      noiseSeedOffset: asset.noiseSeedOffset,
+      avoidSpline: firstLevelTrail,
+      avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.9,
+      avoidCircles: firstLevelClearings,
+    });
+
+    for (const inst of instances) {
+      cloneEntityHierarchy(engine, template.rootEntityId, inst.position[0], inst.position[1], inst.position[2], inst.scale, inst.rotationY);
+      placedCount++;
+    }
+
+    destroyEntityHierarchy(engine, template.rootEntityId);
+  }
 
   for (const asset of NATURE_SCATTER_ASSETS) {
     if (!availableFiles.has(asset.file)) continue;

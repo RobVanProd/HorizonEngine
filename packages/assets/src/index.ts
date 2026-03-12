@@ -25,3 +25,11 @@ export {
   type FbxSceneOptions,
   type SceneBounds,
 } from './fbx-scene.js';
+export {
+  listProceduralTreePresets,
+  spawnProceduralTree,
+  type ProceduralTreePresetId,
+  type ProceduralTreePresetDefinition,
+  type ProceduralTreeSpawnOptions,
+  type SpawnedProceduralTree,
+} from './procedural-tree.js';

@@ -23,6 +23,11 @@ export {
 } from './inference-system.js';
 export { registerMLCommands } from './ml-commands.js';
 export { registerAdvancedCommands } from './advanced-commands.js';
+export {
+  SceneContextLoop,
+  type SceneContextLoopOptions,
+  type SceneContextSnapshot,
+} from './scene-context-loop.js';
 export { WebSocketTransport } from './transports/websocket.js';
 export { WorkerTransport } from './transports/worker.js';
 export type {

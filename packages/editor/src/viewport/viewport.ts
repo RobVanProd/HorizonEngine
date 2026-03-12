@@ -24,6 +24,18 @@ export interface ViewportHudState {
   warnings?: string;
 }
 
+export interface ViewportCaptureOptions {
+  preset?: ViewPreset;
+  restoreCamera?: boolean;
+  target?: [number, number, number];
+  distance?: number;
+  yaw?: number;
+  pitch?: number;
+  ortho?: boolean;
+  orthoSize?: number;
+  waitFrames?: number;
+}
+
 interface TransformDragState {
   entityId: number;
   mode: GizmoMode;
@@ -241,6 +253,41 @@ export class Viewport {
       dataUrl: canvas.toDataURL('image/png'),
       state: this.inspectState(),
     };
+  }
+
+  async captureSnapshotWithOptions(options: ViewportCaptureOptions = {}): Promise<{
+    width: number;
+    height: number;
+    dataUrl: string;
+    state: ReturnType<Viewport['inspectState']>;
+  }> {
+    const previous = this._captureCameraState();
+    const shouldRestore = options.restoreCamera ?? false;
+
+    if (options.preset) {
+      this.camera.setPreset(options.preset);
+      this._viewLabel.textContent = options.preset.charAt(0).toUpperCase() + options.preset.slice(1);
+    }
+    if (options.target) {
+      this.camera.target = [...options.target] as [number, number, number];
+    }
+    if (options.distance !== undefined) this.camera.distance = options.distance;
+    if (options.yaw !== undefined) this.camera.yaw = options.yaw;
+    if (options.pitch !== undefined) this.camera.pitch = options.pitch;
+    if (options.ortho !== undefined) this.camera.ortho = options.ortho;
+    if (options.orthoSize !== undefined) this.camera.orthoSize = options.orthoSize;
+
+    this._renderHud();
+    await this._waitForFrames(options.waitFrames ?? 2);
+    const snapshot = this.captureSnapshot();
+
+    if (shouldRestore) {
+      this._restoreCameraState(previous);
+      this._renderHud();
+      await this._waitForFrames(1);
+    }
+
+    return snapshot;
   }
 
   /**
@@ -705,6 +752,60 @@ export class Viewport {
       warn.style.color = COLORS.warning;
       this._bottomRight.appendChild(warn);
     }
+  }
+
+  private _captureCameraState(): {
+    target: [number, number, number];
+    distance: number;
+    yaw: number;
+    pitch: number;
+    ortho: boolean;
+    orthoSize: number;
+    label: string;
+  } {
+    return {
+      target: [...this.camera.target] as [number, number, number],
+      distance: this.camera.distance,
+      yaw: this.camera.yaw,
+      pitch: this.camera.pitch,
+      ortho: this.camera.ortho,
+      orthoSize: this.camera.orthoSize,
+      label: this._viewLabel.textContent ?? 'Perspective',
+    };
+  }
+
+  private _restoreCameraState(state: {
+    target: [number, number, number];
+    distance: number;
+    yaw: number;
+    pitch: number;
+    ortho: boolean;
+    orthoSize: number;
+    label: string;
+  }): void {
+    this.camera.target = [...state.target] as [number, number, number];
+    this.camera.distance = state.distance;
+    this.camera.yaw = state.yaw;
+    this.camera.pitch = state.pitch;
+    this.camera.ortho = state.ortho;
+    this.camera.orthoSize = state.orthoSize;
+    this._viewLabel.textContent = state.label;
+  }
+
+  private _waitForFrames(count: number): Promise<void> {
+    if (typeof window === 'undefined' || count <= 0) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const step = (remaining: number): void => {
+        if (remaining <= 0) {
+          resolve();
+          return;
+        }
+        window.requestAnimationFrame(() => step(remaining - 1));
+      };
+      step(count);
+    });
   }
 
   private _appendBoundsOverlays(): void {

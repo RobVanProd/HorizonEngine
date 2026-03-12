@@ -1,6 +1,7 @@
 import type { Editor } from './editor.js';
 import type { CommandRouter } from '@engine/ai';
 import type { ViewportOverlayId } from './viewport/viewport.js';
+import type { ViewPreset } from './viewport/editor-camera.js';
 
 /**
  * Register editor-specific AI commands onto a CommandRouter.
@@ -144,6 +145,22 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
   });
 
   router.register({
+    action: 'editor.addProceduralTree',
+    description: 'Generate an ez-tree procedural tree at the editor camera target',
+    params: {
+      preset: { type: 'string', description: 'Preset: oak-medium, oak-large, aspen-medium, aspen-large, ash-medium, pine-medium, pine-large', default: 'oak-medium' },
+      seed: { type: 'number', description: 'Optional deterministic seed' },
+      scale: { type: 'number', description: 'Optional uniform tree scale' },
+    },
+  }, async (params) => {
+    const preset = String(params['preset'] ?? 'oak-medium');
+    const seed = params['seed'] !== undefined ? Number(params['seed']) : undefined;
+    const scale = params['scale'] !== undefined ? Number(params['scale']) : undefined;
+    const entityId = await (editor as any)._spawnProceduralTree(preset, { seed, scale });
+    return { ok: true, data: { entityId, preset, seed, scale } };
+  });
+
+  router.register({
     action: 'editor.focusSelected',
     description: 'Focus the camera on the currently selected entity',
     params: {},
@@ -171,10 +188,46 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
 
   router.register({
     action: 'editor.captureViewport',
-    description: 'Capture the current viewport canvas as a PNG data URL together with camera and overlay state',
-    params: {},
-  }, () => {
-    return { ok: true, data: editor.viewport.captureSnapshot() };
+    description: 'Capture the viewport canvas as a PNG data URL, optionally from a temporary camera preset or camera override',
+    params: {
+      preset: { type: 'string', description: 'Optional temporary preset: perspective, top, front, right' },
+      restoreCamera: { type: 'boolean', description: 'Restore the previous camera after capture', default: true },
+      targetX: { type: 'number', description: 'Optional temporary target X' },
+      targetY: { type: 'number', description: 'Optional temporary target Y' },
+      targetZ: { type: 'number', description: 'Optional temporary target Z' },
+      distance: { type: 'number', description: 'Optional temporary distance' },
+      yaw: { type: 'number', description: 'Optional temporary yaw in radians' },
+      pitch: { type: 'number', description: 'Optional temporary pitch in radians' },
+      ortho: { type: 'boolean', description: 'Optional temporary orthographic toggle' },
+      orthoSize: { type: 'number', description: 'Optional temporary orthographic size' },
+      waitFrames: { type: 'number', description: 'Frames to wait before capture after applying overrides', default: 2 },
+    },
+  }, async (params) => {
+    const hasTarget =
+      params['targetX'] !== undefined ||
+      params['targetY'] !== undefined ||
+      params['targetZ'] !== undefined;
+    const target = hasTarget
+      ? [
+        Number(params['targetX'] ?? editor.viewport.camera.target[0]),
+        Number(params['targetY'] ?? editor.viewport.camera.target[1]),
+        Number(params['targetZ'] ?? editor.viewport.camera.target[2]),
+      ] as [number, number, number]
+      : undefined;
+    return {
+      ok: true,
+      data: await editor.viewport.captureSnapshotWithOptions({
+        preset: params['preset'] !== undefined ? String(params['preset']) as ViewPreset : undefined,
+        restoreCamera: params['restoreCamera'] === undefined ? true : Boolean(params['restoreCamera']),
+        target,
+        distance: params['distance'] !== undefined ? Number(params['distance']) : undefined,
+        yaw: params['yaw'] !== undefined ? Number(params['yaw']) : undefined,
+        pitch: params['pitch'] !== undefined ? Number(params['pitch']) : undefined,
+        ortho: params['ortho'] !== undefined ? Boolean(params['ortho']) : undefined,
+        orthoSize: params['orthoSize'] !== undefined ? Number(params['orthoSize']) : undefined,
+        waitFrames: params['waitFrames'] !== undefined ? Number(params['waitFrames']) : undefined,
+      }),
+    };
   });
 
   router.register({

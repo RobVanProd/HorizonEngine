@@ -7,6 +7,11 @@ import {
   GPUMesh, createSphere, createPlane,
 } from '@engine/renderer-webgpu';
 import { getWorldRegistry, SplineKind } from '@engine/world';
+import {
+  listProceduralTreePresets,
+  spawnProceduralTree,
+  type ProceduralTreePresetId,
+} from '@engine/assets';
 import { injectEditorStyles, COLORS, SIZES, el } from './ui/theme.js';
 import { MenuBar, type MenuGroup } from './ui/menu-bar.js';
 import { Toolbar, type ToolMode, type PlayState } from './ui/toolbar.js';
@@ -132,6 +137,14 @@ export class Editor {
 
     this.hierarchy = new SceneHierarchyPanel(engine, this.selection);
     this.assetBrowser = new AssetBrowser(engine);
+    for (const preset of listProceduralTreePresets()) {
+      this.assetBrowser.addAsset({
+        id: `procedural-tree-${preset.id}`,
+        name: preset.label,
+        type: 'model',
+        path: `procedural-tree:${preset.id}`,
+      });
+    }
     this.properties = new PropertiesPanel(engine, this.selection, this.undoStack);
     this.materialEditor = new MaterialEditor(engine, this.selection);
     this.commandPalette = new CommandPalette();
@@ -329,6 +342,7 @@ export class Editor {
       { id: 'new-entity', title: 'Create Empty Entity', subtitle: 'Scene', keywords: ['entity', 'create', 'scene'], action: () => this._addEntity() },
       { id: 'sphere', title: 'Add Sphere', subtitle: 'Primitive', keywords: ['primitive', 'sphere', 'mesh'], action: () => this._addPrimitive('sphere') },
       { id: 'plane', title: 'Add Plane', subtitle: 'Primitive', keywords: ['primitive', 'plane', 'ground'], action: () => this._addPrimitive('plane') },
+      { id: 'ez-tree', title: 'Add EZ Tree', subtitle: 'Procedural Nature', keywords: ['tree', 'foliage', 'ez-tree', 'procedural'], action: () => { void this._spawnProceduralTree('oak-medium'); } },
       { id: 'terrain', title: 'Generate Terrain Patch', subtitle: 'World', keywords: ['terrain', 'world', 'biome', 'procedural'], action: () => this._createTerrainPatch() },
       { id: 'road-spline', title: 'Create Road Spline', subtitle: 'World', keywords: ['spline', 'road', 'path', 'world'], action: () => this._createRoadSpline() },
       { id: 'focus', title: 'Focus Selected', subtitle: 'Viewport', keywords: ['camera', 'focus'], action: () => this._focusSelected() },
@@ -507,6 +521,7 @@ export class Editor {
           { label: 'Add Cube', action: () => this._addPrimitive('cube') },
           { label: 'Add Sphere', action: () => this._addPrimitive('sphere') },
           { label: 'Add Plane', action: () => this._addPrimitive('plane') },
+          { label: 'Add EZ Tree', action: () => { void this._spawnProceduralTree('oak-medium'); } },
           { separator: true, label: '' },
           { label: 'Generate Terrain Patch', action: () => this._createTerrainPatch() },
           { label: 'Create Road Spline', action: () => this._createRoadSpline() },
@@ -758,6 +773,28 @@ export class Editor {
     this._setLeftTab('world');
   }
 
+  private async _spawnProceduralTree(
+    preset: ProceduralTreePresetId,
+    options: {
+      seed?: number;
+      scale?: number;
+    } = {},
+  ): Promise<number> {
+    const center = this.viewport.camera.target;
+    const groundY = center[1];
+    const spawned = await spawnProceduralTree(this.engine.pbrRenderer.device, this.engine, {
+      preset,
+      seed: options.seed ?? (Date.now() & 0xffff),
+      scale: options.scale ?? 1,
+      position: [center[0], groundY, center[2]],
+      label: `EZ Tree ${preset}`,
+    });
+    this.selection.select(spawned.rootEntityId);
+    this.statusBar.setLeft(`Generated ${preset} as Entity #${spawned.rootEntityId}`);
+    this.assetBrowser.refresh();
+    return spawned.rootEntityId;
+  }
+
   private _setupViewportAssetDrop(): void {
     const target = this.layout.viewport;
     target.addEventListener('dragover', (e) => {
@@ -785,6 +822,12 @@ export class Editor {
   }
 
   private _instantiateAsset(asset: AssetEntry): void {
+    if (asset.path?.startsWith('procedural-tree:')) {
+      const preset = asset.path.slice('procedural-tree:'.length) as ProceduralTreePresetId;
+      void this._spawnProceduralTree(preset);
+      return;
+    }
+
     switch (asset.type) {
       case 'mesh':
       case 'model':
