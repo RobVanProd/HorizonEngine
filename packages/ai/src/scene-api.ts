@@ -315,6 +315,135 @@ export function registerSceneCommands(router: CommandRouter, engine: Engine): vo
     },
   );
 
+  router.register(
+    {
+      action: 'scene.layoutSummary',
+      description: 'Summarize the current scene layout as top-down bounds, an occupancy heatmap, and the biggest landmarks. Use this when AI needs spatial context rather than raw entity lists.',
+      params: {
+        gridSize: { type: 'number', description: 'Top-down occupancy grid resolution', default: 12 },
+        limit: { type: 'number', description: 'Max renderable entities to sample', default: 5000 },
+      },
+    },
+    (params) => {
+      const gridSize = clampInt((params['gridSize'] as number | undefined) ?? 12, 4, 32);
+      const limit = clampInt((params['limit'] as number | undefined) ?? 5000, 1, 20000);
+      const q = world.query(MeshRef, Visible);
+      const entries: Array<{
+        entityId: number;
+        label: string;
+        x: number;
+        z: number;
+        radius: number;
+        triangles: number;
+      }> = [];
+
+      q.each((arch, count) => {
+        if (entries.length >= limit) return;
+        const ids = arch.entities.data as Uint32Array;
+        for (let i = 0; i < count && entries.length < limit; i++) {
+          const id = ids[i]!;
+          const meshHandle = world.getField(id, MeshRef, 'handle');
+          const mesh = engine.meshes.get(meshHandle);
+          if (!mesh) continue;
+
+          let x = 0;
+          let z = 0;
+          let scale = 1;
+          if (world.hasComponent(id, LocalTransform)) {
+            x = world.getField(id, LocalTransform, 'px');
+            z = world.getField(id, LocalTransform, 'pz');
+            scale = Math.max(
+              Math.abs(world.getField(id, LocalTransform, 'scaleX')),
+              Math.abs(world.getField(id, LocalTransform, 'scaleY')),
+              Math.abs(world.getField(id, LocalTransform, 'scaleZ')),
+            );
+          }
+
+          entries.push({
+            entityId: id,
+            label: engine.getEntityLabel(id) ?? `Entity #${id}`,
+            x,
+            z,
+            radius: Math.max(0.25, mesh.boundsRadius * Math.max(scale, 0.01)),
+            triangles: mesh.triangleCount,
+          });
+        }
+      });
+
+      if (entries.length === 0) {
+        return { ok: true, data: { count: 0, bounds: null, occupancy: [], landmarks: [], labelCounts: [] } };
+      }
+
+      let minX = Infinity;
+      let minZ = Infinity;
+      let maxX = -Infinity;
+      let maxZ = -Infinity;
+      for (const entry of entries) {
+        minX = Math.min(minX, entry.x - entry.radius);
+        minZ = Math.min(minZ, entry.z - entry.radius);
+        maxX = Math.max(maxX, entry.x + entry.radius);
+        maxZ = Math.max(maxZ, entry.z + entry.radius);
+      }
+
+      const spanX = Math.max(1e-3, maxX - minX);
+      const spanZ = Math.max(1e-3, maxZ - minZ);
+      const grid = new Float32Array(gridSize * gridSize);
+      const labelCounts = new Map<string, number>();
+
+      for (const entry of entries) {
+        labelCounts.set(entry.label, (labelCounts.get(entry.label) ?? 0) + 1);
+        const gx = clampInt(Math.floor(((entry.x - minX) / spanX) * gridSize), 0, gridSize - 1);
+        const gz = clampInt(Math.floor(((entry.z - minZ) / spanZ) * gridSize), 0, gridSize - 1);
+        const weight = 1 + Math.min(entry.radius * 0.2, 6) + Math.min(entry.triangles / 4000, 6);
+        grid[gz * gridSize + gx]! += weight;
+      }
+
+      let maxWeight = 0;
+      for (let i = 0; i < grid.length; i++) maxWeight = Math.max(maxWeight, grid[i]!);
+      const occupancy: number[][] = [];
+      for (let z = 0; z < gridSize; z++) {
+        const row: number[] = [];
+        for (let x = 0; x < gridSize; x++) {
+          const value = grid[z * gridSize + x]!;
+          row.push(maxWeight > 0 ? Number((value / maxWeight).toFixed(3)) : 0);
+        }
+        occupancy.push(row);
+      }
+
+      const landmarks = [...entries]
+        .sort((a, b) => (b.triangles + b.radius * 10) - (a.triangles + a.radius * 10))
+        .slice(0, 12)
+        .map((entry) => ({
+          entityId: entry.entityId,
+          label: entry.label,
+          position: [entry.x, entry.z],
+          radius: Number(entry.radius.toFixed(2)),
+          triangles: entry.triangles,
+        }));
+
+      const labelSummary = [...labelCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(([label, count]) => ({ label, count }));
+
+      return {
+        ok: true,
+        data: {
+          count: entries.length,
+          cameraEye: engine.cameraEye,
+          bounds: {
+            min: [Number(minX.toFixed(2)), Number(minZ.toFixed(2))],
+            max: [Number(maxX.toFixed(2)), Number(maxZ.toFixed(2))],
+            size: [Number(spanX.toFixed(2)), Number(spanZ.toFixed(2))],
+          },
+          occupancy,
+          landmarks,
+          labelCounts: labelSummary,
+        },
+      };
+    },
+  );
+
   // ─── scene.query ──────────────────────────────────────────────────
   router.register(
     {
@@ -487,4 +616,8 @@ function getComponentLookup(): Map<string, any> {
   _compLookup.set('Parent', Parent);
   _compLookup.set('HierarchyDepth', HierarchyDepth);
   return _compLookup;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
 }

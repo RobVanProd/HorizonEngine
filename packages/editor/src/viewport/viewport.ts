@@ -228,6 +228,21 @@ export class Viewport {
     };
   }
 
+  captureSnapshot(): {
+    width: number;
+    height: number;
+    dataUrl: string;
+    state: ReturnType<Viewport['inspectState']>;
+  } {
+    const canvas = this._engine.canvas.element;
+    return {
+      width: canvas.width,
+      height: canvas.height,
+      dataUrl: canvas.toDataURL('image/png'),
+      state: this.inspectState(),
+    };
+  }
+
   /**
    * Called each frame from the editor render loop.
    * Renders grid and gizmos into the current render pass.

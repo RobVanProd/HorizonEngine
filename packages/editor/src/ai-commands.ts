@@ -170,6 +170,14 @@ export function registerEditorCommands(router: CommandRouter, editor: Editor): v
   });
 
   router.register({
+    action: 'editor.captureViewport',
+    description: 'Capture the current viewport canvas as a PNG data URL together with camera and overlay state',
+    params: {},
+  }, () => {
+    return { ok: true, data: editor.viewport.captureSnapshot() };
+  });
+
+  router.register({
     action: 'editor.toggleOverlay',
     description: 'Toggle a viewport debug overlay',
     params: {
