@@ -486,15 +486,15 @@ async function loadNaturePackDemo(
 
   const grassField = buildStylizedGrassMesh(heightfield, {
     seed: FIRST_LEVEL_SEED ^ 0x9e3779b9,
-    density: 0.96,
-    bladesPerCell: 8,
-    minBladeHeight: 0.52,
-    maxBladeHeight: 1.18,
-    bladeWidth: 0.16,
+    density: 1,
+    bladesPerCell: 13,
+    minBladeHeight: 0.5,
+    maxBladeHeight: 1.12,
+    bladeWidth: 0.14,
     allowedBiomes: [BiomeId.Plains, BiomeId.Forest],
     minNormalizedHeight: 0.05,
     maxNormalizedHeight: 0.62,
-    maxSlope: 0.11,
+    maxSlope: 0.12,
     avoidSpline: firstLevelTrail,
     avoidSplineRadius: FIRST_LEVEL_TRAIL_WIDTH * 0.58,
     avoidCircles: firstLevelClearings.map((clearing) => ({
