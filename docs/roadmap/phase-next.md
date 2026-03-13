@@ -58,13 +58,14 @@ Goal: make scenes coherent, dynamic, and believable.
 
 Current foundation:
 
-- Sun light, PBR, IBL, fog, water shading
+- Sun light, PBR, IBL, water shading, and sky groundwork
 - Procedural visible sky
 - Camera-following stabilized directional shadows
+- Lighting Baseline v0 design spec in `docs/architecture/lighting-baseline-v0.md`
 
 Next milestones:
 
-- Outdoor lighting baseline polish: exposure, tone mapping, shadow tuning, fog integration.
+- Implement Lighting Baseline v0 Slice 1: manual exposure, analytic fog, and shadow texel-size cleanup for `first-nature-expedition`.
 - Probe or grid-based indirect lighting approximation.
 - Reflection stack: SSR plus probes and roughness-aware fallback.
 - Lighting debug tools: shadow visualizer, probe debug, exposure histogram.
@@ -145,6 +146,7 @@ Open issues and immediate gaps:
 
 - Ground material richness and terrain blending remain weak at close range.
 - Outdoor lighting still needs a more cohesive baseline and better shadow tuning.
+- Lighting Baseline v0 is now specified, but the first implementation slice has not landed yet.
 - Foliage needs scalability policies instead of only raw density pushes.
 - Scene budgets and stress benchmarks now have a first concrete forest runner, a browser multi-run entrypoint, a saved-output comparison pass, and a minimal in-browser compare helper, but still need richer metrics and better scan-oriented summaries.
 - Clouds and atmospheric VFX are still references, not native engine features.

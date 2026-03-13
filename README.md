@@ -135,6 +135,7 @@ Contributions are welcome. See `CONTRIBUTING.md` for development workflow and ex
 - **Phase 10** — Game demo: collectible exploration, play HUD, ship with engine *(current)*
 
 Detailed next-program planning and progress tracking now live in [docs/roadmap/phase-next.md](./docs/roadmap/phase-next.md).
+The current design packets for the next implementation slices live in [docs/architecture/ai-control-plane-v0.md](./docs/architecture/ai-control-plane-v0.md) and [docs/architecture/lighting-baseline-v0.md](./docs/architecture/lighting-baseline-v0.md).
 
 ## Internal Design Mantra
 
