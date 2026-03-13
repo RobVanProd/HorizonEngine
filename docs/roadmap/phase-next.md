@@ -40,6 +40,7 @@ Current foundation:
 - Forest Stress Benchmark v0 spec in `docs/roadmap/forest-stress-benchmark-v0.md`
 - Forest Stress Benchmark Runner v0 for the `first-nature-expedition` scene with structured JSON run output
 - Browser-accessible forest benchmark entrypoint that runs all four density tiers sequentially on fresh engine instances
+- Lightweight regression comparison pass for saved four-tier forest benchmark outputs
 
 Next milestones:
 
@@ -48,7 +49,7 @@ Next milestones:
 - Improve snapshot/diff coverage for hierarchy-aware creation and future semantic actions.
 - Add semantic primitives: biome, path, clearing, campsite, landmark, encounter zone, mood profile, weather preset.
 - Extend the benchmark harness beyond the current atomic create/rename/transform slice.
-- Add lightweight regression comparison tooling for saved four-tier forest benchmark outputs.
+- Add a tiny browser-side helper that invokes the saved-output comparison pass from pasted JSON.
 
 ### B. Lighting System
 
@@ -136,13 +137,14 @@ Completed groundwork already in the repo:
 - Forest Stress Benchmark v0 spec plus initial renderer/entity metric snapshot helper.
 - Forest Stress Benchmark Runner v0 with concrete `first-nature-expedition` scene selection, density-tier parameterization, and per-run JSON output.
 - Browser entrypoint at `examples/editor-demo/forest-benchmark.html` with four-tier sequential execution, fresh-instance orchestration, console/`window` surfacing, and downloadable JSON output.
+- Saved-output comparison pass for forest benchmark JSON bundles with per-tier metric deltas and missing-tier handling.
 
 Open issues and immediate gaps:
 
 - Ground material richness and terrain blending remain weak at close range.
 - Outdoor lighting still needs a more cohesive baseline and better shadow tuning.
 - Foliage needs scalability policies instead of only raw density pushes.
-- Scene budgets and stress benchmarks now have a first concrete forest runner and a browser multi-run entrypoint, but still need richer metrics and regression comparison.
+- Scene budgets and stress benchmarks now have a first concrete forest runner, a browser multi-run entrypoint, and a saved-output comparison pass, but still need richer metrics and lightweight in-browser comparison ergonomics.
 - Clouds and atmospheric VFX are still references, not native engine features.
 
 ## Ruthless Priority Order

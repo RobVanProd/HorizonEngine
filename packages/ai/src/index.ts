@@ -55,6 +55,15 @@ export {
   type ForestStressDensityLabel,
 } from './benchmark/forest-stress-benchmark.js';
 export {
+  compareForestStressBenchmarkRunSets,
+  parseForestStressBenchmarkRunSet,
+  serializeForestStressBenchmarkComparison,
+  type ForestStressBenchmarkComparison,
+  type ForestStressNumericDelta,
+  type ForestStressRendererFrameComparison,
+  type ForestStressTierComparison,
+} from './benchmark/forest-stress-compare.js';
+export {
   SceneContextLoop,
   type SceneContextLoopOptions,
   type SceneContextSnapshot,

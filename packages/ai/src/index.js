@@ -11,6 +11,7 @@ export { registerControlPlaneCommands } from './control-plane/control-plane-api.
 export { previewAiActionPlan, applyAiActionPlan, applyAiActionPlanWithUndoLog, undoAiActionPlanExecution, } from './control-plane/plan-executor.js';
 export { runControlPlaneBenchmarkSuite, runControlPlaneBenchmarkTask, createMinimalControlPlaneBenchmarkTasks, collectForestStressMetrics, } from './benchmark/control-plane-benchmark.js';
 export { runForestStressBenchmarkRun, runForestStressBenchmarkMatrix, serializeForestStressBenchmarkRun, getForestStressBenchmarkOutputPath, } from './benchmark/forest-stress-benchmark.js';
+export { compareForestStressBenchmarkRunSets, parseForestStressBenchmarkRunSet, serializeForestStressBenchmarkComparison, } from './benchmark/forest-stress-compare.js';
 export { SceneContextLoop } from './scene-context-loop.js';
 export { WebSocketTransport } from './transports/websocket.js';
 export { WorkerTransport } from './transports/worker.js';

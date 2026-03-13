@@ -127,6 +127,32 @@ Not implemented yet:
 - historical run storage
 - one-click integration from the main editor screen
 
+## Comparing Two Saved Outputs
+
+Implemented now:
+
+- A lightweight comparison tool in `packages/ai/src/benchmark/forest-stress-compare.ts`
+- It accepts two saved JSON arrays in the existing forest benchmark run shape
+- It compares `low`, `medium`, `high`, and `extreme` deterministically in that order
+- It reports only the currently real fields:
+  - `elapsedMs`
+  - `entityCount`
+  - `meshCount`
+  - `materialCount`
+  - renderer frame counters when present
+
+How users provide the two saved outputs:
+
+- Load the two downloaded JSON bundles from `/forest-benchmark.html`
+- Parse them with `parseForestStressBenchmarkRunSet(...)`
+- Pass the arrays to `compareForestStressBenchmarkRunSets(...)`
+
+Missing tiers or metrics:
+
+- Missing tiers are preserved as structured per-tier errors
+- Missing renderer counters are preserved as structured missing-metric statuses
+- The comparison stays JSON-friendly even when a tier cannot be compared cleanly
+
 ## Comparison Criteria
 
 v0 comparison is relative, not absolute.
@@ -150,4 +176,4 @@ The forest stress benchmark is the renderer/content scaling counterpart. In the 
 
 ## Next Implementation Step
 
-Add a lightweight comparison/report pass that highlights per-tier regressions between two four-run benchmark outputs without introducing a full dashboard.
+Add a tiny browser-side helper on the benchmark page that accepts two pasted JSON bundles and prints the structured comparison output without turning into a dashboard.
