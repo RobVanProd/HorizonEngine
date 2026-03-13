@@ -420,6 +420,16 @@ async function loadNaturePackDemo(
     intensity: 4.9,
     ambient: [0.03, 0.04, 0.045],
     envIntensity: 1.05,
+    shadowBias: 0.0028,
+    shadowNormalBias: 0.0018,
+    exposure: 1.02,
+    fog: {
+      color: [0.75, 0.83, 0.9],
+      density: 0.012,
+      heightFalloff: 0.09,
+      startDistance: 18,
+      maxOpacity: 0.3,
+    },
   };
 
   const registry = getWorldRegistry(engine);

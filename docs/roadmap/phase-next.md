@@ -62,10 +62,11 @@ Current foundation:
 - Procedural visible sky
 - Camera-following stabilized directional shadows
 - Lighting Baseline v0 design spec in `docs/architecture/lighting-baseline-v0.md`
+- Lighting Baseline v0 Slice 1: manual exposure, analytic fog, and resolution-aware shadow filtering in the current renderer path
 
 Next milestones:
 
-- Implement Lighting Baseline v0 Slice 1: manual exposure, analytic fog, and shadow texel-size cleanup for `first-nature-expedition`.
+- Shadow tuning and validation pass for `first-nature-expedition`, especially forest-contact stability and fog/exposure balancing.
 - Probe or grid-based indirect lighting approximation.
 - Reflection stack: SSR plus probes and roughness-aware fallback.
 - Lighting debug tools: shadow visualizer, probe debug, exposure histogram.
@@ -141,12 +142,13 @@ Completed groundwork already in the repo:
 - Browser entrypoint at `examples/editor-demo/forest-benchmark.html` with four-tier sequential execution, fresh-instance orchestration, console/`window` surfacing, and downloadable JSON output.
 - Saved-output comparison pass for forest benchmark JSON bundles with per-tier metric deltas and missing-tier handling.
 - Browser-side pasted-JSON comparison flow on `/forest-benchmark.html` using the same saved-output comparison module.
+- Lighting Baseline v0 Slice 1 with manual exposure, analytic fog, and actual shadow-resolution-derived PCF sampling.
 
 Open issues and immediate gaps:
 
 - Ground material richness and terrain blending remain weak at close range.
 - Outdoor lighting still needs a more cohesive baseline and better shadow tuning.
-- Lighting Baseline v0 is now specified, but the first implementation slice has not landed yet.
+- Lighting Baseline v0 has landed, but it still needs forest-scene tuning and richer debug views.
 - Foliage needs scalability policies instead of only raw density pushes.
 - Scene budgets and stress benchmarks now have a first concrete forest runner, a browser multi-run entrypoint, a saved-output comparison pass, and a minimal in-browser compare helper, but still need richer metrics and better scan-oriented summaries.
 - Clouds and atmospheric VFX are still references, not native engine features.

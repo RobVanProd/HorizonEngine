@@ -70,6 +70,15 @@ export class Engine {
     envIntensity: 1.0,
     pointLights: [],
     shadowBias: 0.003,
+    shadowNormalBias: 0.0015,
+    exposure: 1.0,
+    fog: {
+      color: [0.76, 0.84, 0.92],
+      density: 0.0,
+      heightFalloff: 0.0,
+      startDistance: 0.0,
+      maxOpacity: 0.0,
+    },
     debugView: 'lit',
   };
 

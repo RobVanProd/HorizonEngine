@@ -26,7 +26,7 @@ import grassShaderSource from './shaders/grass.wgsl?raw';
 import { WaterMaterial } from './water-material.js';
 import { GrassMaterial } from './grass-material.js';
 const CAMERA_BUFFER_SIZE = 160;
-const LIGHT_BUFFER_SIZE = 256;
+const LIGHT_BUFFER_SIZE = 288;
 const OBJECT_BUFFER_SIZE = 128;
 const MAX_OBJECTS = 1024;
 const MAX_JOINTS = 256;
@@ -394,7 +394,7 @@ export class PBRRenderer {
         this._gpu.device.queue.writeBuffer(this._cameraBuffer, 0, data);
     }
     setLighting(lighting) {
-        const d = new Float32Array(64);
+        const d = new Float32Array(LIGHT_BUFFER_SIZE / 4);
         const dx = lighting.direction[0], dy = lighting.direction[1], dz = lighting.direction[2];
         const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
         d[0] = dx / len;
@@ -417,11 +417,24 @@ export class PBRRenderer {
         d[29] = this._environment?.maxMipLevel ?? 4;
         d[30] = lighting.shadowBias ?? 0.003;
         d[31] = debugViewToIndex(lighting.debugView);
+        d[32] = this._shadowMap ? 1 / this._shadowMap.resolution : 0;
+        d[33] = this._shadowMap ? 1 / this._shadowMap.resolution : 0;
+        d[34] = lighting.shadowNormalBias ?? 0.0015;
+        d[35] = lighting.exposure ?? 1.0;
+        const fog = lighting.fog;
+        d[36] = fog?.color[0] ?? 0;
+        d[37] = fog?.color[1] ?? 0;
+        d[38] = fog?.color[2] ?? 0;
+        d[39] = fog?.density ?? 0;
+        d[40] = fog?.heightFalloff ?? 0;
+        d[41] = fog?.startDistance ?? 0;
+        d[42] = fog?.maxOpacity ?? 0;
+        d[43] = 0;
         const pointLights = (lighting.pointLights ?? []).slice(0, MAX_POINT_LIGHTS);
         for (let i = 0; i < pointLights.length; i++) {
             const light = pointLights[i];
-            const posOffset = 32 + i * 4;
-            const colorOffset = 48 + i * 4;
+            const posOffset = 44 + i * 4;
+            const colorOffset = 60 + i * 4;
             d[posOffset] = light.position[0];
             d[posOffset + 1] = light.position[1];
             d[posOffset + 2] = light.position[2];

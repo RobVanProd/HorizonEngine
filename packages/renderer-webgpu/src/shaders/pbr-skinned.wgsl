@@ -20,6 +20,15 @@ struct LightUniforms {
   maxReflectionLod: f32,
   shadowBias: f32,
   debugView: f32,
+  shadowTexelSize: vec2f,
+  shadowNormalBias: f32,
+  exposure: f32,
+  fogColor: vec3f,
+  fogDensity: f32,
+  fogHeightFalloff: f32,
+  fogStartDistance: f32,
+  fogMaxOpacity: f32,
+  _pad1: f32,
   pointPositionRange: array<vec4f, 4>,
   pointColorIntensity: array<vec4f, 4>,
 };
@@ -141,19 +150,28 @@ fn aces(x: vec3f) -> vec3f {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3f(0.0), vec3f(1.0));
 }
 
-fn computeShadow(worldPos: vec3f) -> f32 {
+fn computeFogFactor(worldPos: vec3f) -> f32 {
+  if (light.fogDensity <= 0.0 || light.fogMaxOpacity <= 0.0) { return 0.0; }
+  let viewDistance = max(distance(camera.position, worldPos) - light.fogStartDistance, 0.0);
+  let distanceFog = 1.0 - exp(-viewDistance * light.fogDensity);
+  let heightFog = exp(-max(worldPos.y, 0.0) * light.fogHeightFalloff);
+  return clamp(distanceFog * heightFog * light.fogMaxOpacity, 0.0, light.fogMaxOpacity);
+}
+
+fn computeShadow(worldPos: vec3f, NdotL: f32) -> f32 {
   if (light.shadowEnabled < 0.5) { return 1.0; }
   let lightClip = light.lightViewProj * vec4f(worldPos, 1.0);
   let ndc = lightClip.xyz / lightClip.w;
   let shadowUV = ndc.xy * vec2f(0.5, -0.5) + 0.5;
+  let normalBias = light.shadowNormalBias * (1.0 - clamp(NdotL, 0.0, 1.0));
   let currentDepth = ndc.z;
   var shadow = 0.0;
-  let texelSize = 1.0 / 2048.0;
+  let texelSize = light.shadowTexelSize;
   for (var x = -1i; x <= 1i; x++) {
     for (var y = -1i; y <= 1i; y++) {
       let offset = vec2f(f32(x), f32(y)) * texelSize;
       let uv = shadowUV + offset;
-      shadow += textureSampleCompareLevel(shadowMap, shadowSampler, uv, currentDepth - light.shadowBias);
+      shadow += textureSampleCompareLevel(shadowMap, shadowSampler, uv, currentDepth - (light.shadowBias + normalBias));
     }
   }
   let inBounds = step(0.0, shadowUV.x) * step(shadowUV.x, 1.0) *
@@ -218,7 +236,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   let diffuse = kD * albedo / PI;
 
   let radiance = light.dirColor * light.dirIntensity;
-  let shadow = computeShadow(in.worldPos);
+  let shadow = computeShadow(in.worldPos, NdotL);
   var Lo = (diffuse + spec) * radiance * NdotL * shadow;
   var lightComplexity = select(0.0, 1.0, NdotL > 0.0);
 
@@ -284,6 +302,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   }
 
   var color = Lo + iblColor + emissive;
+  let fogFactor = computeFogFactor(in.worldPos);
+  color = mix(color, light.fogColor, fogFactor);
+  color = color * light.exposure;
   color = aces(color);
   color = pow(color, vec3f(1.0 / 2.2));
   return vec4f(color, material.albedo.a);

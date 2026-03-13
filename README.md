@@ -64,6 +64,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 ## Current Capabilities
 
 - WebGPU renderer with PBR materials, image-based lighting, shadows, and environment maps
+- Lighting baseline slice with manual exposure, analytic outdoor fog, and resolution-aware directional shadow filtering
 - ECS runtime with transform hierarchy, scheduler phases, and data-oriented component storage
 - Asset pipeline for glTF/GLB, FBX, HDR environments, and textures
 - Skeletal animation and skinned rendering
@@ -86,6 +87,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 - The procedural visible sky now targets a cleaner blue outdoor look and supports engine-side sun-aware cloud shaping in the generated sky cubemap, so outdoor scenes no longer need to rely on a photographic backdrop.
 - The WebGPU bootstrap now requests the adapter's higher `maxBufferSize` limit when available, which keeps large merged showcase meshes such as dense meadow fields from failing on the default 256 MB device limit.
 - Directional shadows now follow and stabilize around the active camera focus instead of a fixed origin-centered light box, which keeps outdoor shadow coverage usable across the playable area instead of only in the middle of the map.
+- The first lighting-baseline implementation slice is now in the renderer path: `SceneLighting` supports manual exposure, analytic fog, and shadow normal-bias tuning, exposure is applied before the existing ACES tone mapper, and shadow PCF sampling now derives its texel size from the actual shadow-map resolution instead of assuming `2048`.
 - The AI/editor integration now exposes `editor.captureViewport` for direct viewport PNG capture with optional temporary camera overrides or presets, and `scene.layoutSummary` for a compact top-down occupancy/landmark summary, which gives engine-facing agents much better scene context than raw entity lists alone.
 - The AI package now also includes a reusable `SceneContextLoop`, which automatically records the latest live viewport capture, a generated occupancy map, and the matching `scene.layoutSummary` payload behind `engine.getSceneContext` / `engine.captureSceneContext`. Real top-down viewport capture remains available on demand so the background loop does not visibly disturb the editor camera.
 - The AI package now also includes a minimal benchmark harness for the current control-plane slice, so create/rename/transform plan preview/apply behavior can be replayed and measured before the action surface expands; the first forest-scaling spec lives in `docs/roadmap/forest-stress-benchmark-v0.md`.
