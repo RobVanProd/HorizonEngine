@@ -63,10 +63,12 @@ Current foundation:
 - Camera-following stabilized directional shadows
 - Lighting Baseline v0 design spec in `docs/architecture/lighting-baseline-v0.md`
 - Lighting Baseline v0 Slice 1: manual exposure, analytic fog, and resolution-aware shadow filtering in the current renderer path
+- Initial `first-nature-expedition` tuning pass with lower exposure, lighter fog, and reduced shadow normal bias for forest readability validation
+- Low and medium Forest Stress Benchmark reruns after the tuning pass kept entity/mesh/material/frame counters flat; only elapsed runtime moved, so the slice currently reads as no meaningful geometry-budget regression
 
 Next milestones:
 
-- Shadow tuning and validation pass for `first-nature-expedition`, especially forest-contact stability and fog/exposure balancing.
+- Capture reliable viewport evidence for `first-nature-expedition` from the automated browser path and continue forest-contact shadow tuning.
 - Probe or grid-based indirect lighting approximation.
 - Reflection stack: SSR plus probes and roughness-aware fallback.
 - Lighting debug tools: shadow visualizer, probe debug, exposure histogram.
@@ -143,12 +145,14 @@ Completed groundwork already in the repo:
 - Saved-output comparison pass for forest benchmark JSON bundles with per-tier metric deltas and missing-tier handling.
 - Browser-side pasted-JSON comparison flow on `/forest-benchmark.html` using the same saved-output comparison module.
 - Lighting Baseline v0 Slice 1 with manual exposure, analytic fog, and actual shadow-resolution-derived PCF sampling.
+- First forest-scene lighting validation pass with tuned authored preset values and low/medium benchmark rerun support.
+- Forest benchmark comparison currently shows stable scene complexity counters across the lighting tuning pass, with runtime timing shifts only.
 
 Open issues and immediate gaps:
 
 - Ground material richness and terrain blending remain weak at close range.
-- Outdoor lighting still needs a more cohesive baseline and better shadow tuning.
-- Lighting Baseline v0 has landed, but it still needs forest-scene tuning and richer debug views.
+- Outdoor lighting still needs stronger captured validation evidence and better shadow-contact tuning.
+- Lighting Baseline v0 has landed and has a first forest tuning pass, but it still needs richer debug views.
 - Foliage needs scalability policies instead of only raw density pushes.
 - Scene budgets and stress benchmarks now have a first concrete forest runner, a browser multi-run entrypoint, a saved-output comparison pass, and a minimal in-browser compare helper, but still need richer metrics and better scan-oriented summaries.
 - Clouds and atmospheric VFX are still references, not native engine features.

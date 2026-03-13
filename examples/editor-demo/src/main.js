@@ -142,21 +142,21 @@ const NATURE_SCATTER_ASSETS = [
 async function loadNaturePackDemo(engine, device) {
     engine.lighting = {
         direction: [-0.28, -0.92, -0.24],
-        color: [1.0, 0.985, 0.96],
-        intensity: 4.9,
-        ambient: [0.03, 0.04, 0.045],
-        envIntensity: 1.05,
-        shadowBias: 0.0028,
-        shadowNormalBias: 0.0018,
-        exposure: 1.02,
-        fog: {
-            color: [0.75, 0.83, 0.9],
-            density: 0.012,
-            heightFalloff: 0.09,
-            startDistance: 18,
-            maxOpacity: 0.3,
-        },
-    };
+    color: [1.0, 0.985, 0.96],
+    intensity: 4.9,
+    ambient: [0.03, 0.04, 0.045],
+    envIntensity: 1.05,
+    shadowBias: 0.0024,
+    shadowNormalBias: 0.0012,
+    exposure: 0.98,
+    fog: {
+      color: [0.78, 0.86, 0.93],
+      density: 0.0095,
+      heightFalloff: 0.065,
+      startDistance: 24,
+      maxOpacity: 0.22,
+    },
+  };
     const registry = getWorldRegistry(engine);
     const terrainSize = 200;
     const cellSize = 2;

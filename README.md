@@ -138,6 +138,7 @@ Contributions are welcome. See `CONTRIBUTING.md` for development workflow and ex
 
 Detailed next-program planning and progress tracking now live in [docs/roadmap/phase-next.md](./docs/roadmap/phase-next.md).
 The current design packets for the next implementation slices live in [docs/architecture/ai-control-plane-v0.md](./docs/architecture/ai-control-plane-v0.md) and [docs/architecture/lighting-baseline-v0.md](./docs/architecture/lighting-baseline-v0.md).
+The current `first-nature-expedition` lighting validation preset now uses `shadowBias: 0.0024`, `shadowNormalBias: 0.0012`, `exposure: 0.98`, and lighter fog (`color: [0.78, 0.86, 0.93]`, `density: 0.0095`, `heightFalloff: 0.065`, `startDistance: 24`, `maxOpacity: 0.22`) to improve canopy readability without changing the renderer feature set.
 
 ## Internal Design Mantra
 
