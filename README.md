@@ -72,6 +72,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 - Particle effects with spline- and terrain-aware spawning
 - AI command APIs: scene (spawn, list, inspect, setLabel), world (terrain, spline, scatter), editor (viewport, overlays), VFX, geometry stats
 - AI Control Plane v0 slice: `scene.read.entities`, `scene.read.entity`, `scene.previewPlan`, and `scene.applyPlan` for safe create/rename/transform planning with structured validation, diffs, and editor-grouped undo
+- AI benchmark support: a minimal control-plane benchmark harness for replayable preview/apply create, rename, and transform tasks, plus an initial forest-stress metrics surface
 - In-engine devtools plus a scene editor with hierarchy, properties, assets, viewport controls, and transform gizmos
 - Play mode with game demo: collect orbs, objective HUD, ships with engine
 
@@ -86,6 +87,7 @@ The editor demo loads a boot intro video, then opens the scene editor. With the 
 - Directional shadows now follow and stabilize around the active camera focus instead of a fixed origin-centered light box, which keeps outdoor shadow coverage usable across the playable area instead of only in the middle of the map.
 - The AI/editor integration now exposes `editor.captureViewport` for direct viewport PNG capture with optional temporary camera overrides or presets, and `scene.layoutSummary` for a compact top-down occupancy/landmark summary, which gives engine-facing agents much better scene context than raw entity lists alone.
 - The AI package now also includes a reusable `SceneContextLoop`, which automatically records the latest live viewport capture, a generated occupancy map, and the matching `scene.layoutSummary` payload behind `engine.getSceneContext` / `engine.captureSceneContext`. Real top-down viewport capture remains available on demand so the background loop does not visibly disturb the editor camera.
+- The AI package now also includes a minimal benchmark harness for the current control-plane slice, so create/rename/transform plan preview/apply behavior can be replayed and measured before the action surface expands; the first forest-scaling spec lives in `docs/roadmap/forest-stress-benchmark-v0.md`.
 - The assets package now bridges `@dgreenheck/ez-tree` into engine-native meshes and materials, and the editor exposes those presets as draggable procedural tree assets plus an `editor.addProceduralTree` command so teams can opt into generated trees instead of authored tree packs.
 - The world runtime exposes reusable scatter exclusions (`avoidSpline`, `avoidCircles`) so levels can keep trails and landmarks readable without special-case scene code.
 - The world runtime also exposes water placement controls (`waterScaleX`, `waterScaleZ`, offsets, and material overrides) so a level can ask for a pond, spring, or broad sheet instead of only a full-terrain plane.

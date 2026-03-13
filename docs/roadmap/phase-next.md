@@ -36,6 +36,8 @@ Current foundation:
 - AI Control Plane v0 design spec in `docs/architecture/ai-control-plane-v0.md`
 - AI Control Plane v0 minimal implementation: `scene.read.entities`, `scene.read.entity`, `scene.previewPlan`, `scene.applyPlan`
 - Editor-backed grouped undo for v0 create, rename, and transform plans
+- Control-plane Benchmark Harness v0 for repeatable preview/apply create, rename, and transform tasks
+- Forest Stress Benchmark v0 spec in `docs/roadmap/forest-stress-benchmark-v0.md`
 
 Next milestones:
 
@@ -43,7 +45,7 @@ Next milestones:
 - Extend v0 write coverage from create/rename/transform to delete and tag mutations.
 - Improve snapshot/diff coverage for hierarchy-aware creation and future semantic actions.
 - Add semantic primitives: biome, path, clearing, campsite, landmark, encounter zone, mood profile, weather preset.
-- Build a benchmark harness for atomic, scene-editing, multi-step, and debugging tasks.
+- Extend the benchmark harness beyond the current atomic create/rename/transform slice.
 
 ### B. Lighting System
 
@@ -127,13 +129,15 @@ Completed groundwork already in the repo:
 - Camera-following stabilized directional shadows for forest scenes.
 - AI Control Plane v0 architecture document and module plan.
 - AI Control Plane v0 executable slice with structured preview/apply, validation, diffs, and editor undo integration for create/rename/transform.
+- AI Control Plane Benchmark Harness v0 with repeatable preview/apply coverage for create/rename/transform and structured result logging.
+- Forest Stress Benchmark v0 spec plus initial renderer/entity metric snapshot helper.
 
 Open issues and immediate gaps:
 
 - Ground material richness and terrain blending remain weak at close range.
 - Outdoor lighting still needs a more cohesive baseline and better shadow tuning.
 - Foliage needs scalability policies instead of only raw density pushes.
-- Scene budgets and stress benchmarks are not yet first-class engine systems.
+- Scene budgets and stress benchmarks are only partially surfaced through the new v0 metric helper and still need full runners.
 - Clouds and atmospheric VFX are still references, not native engine features.
 
 ## Ruthless Priority Order
@@ -150,6 +154,12 @@ Open issues and immediate gaps:
 ### Forest Stress Benchmark
 
 This becomes one of the main scaling tests for the engine.
+
+Current status:
+
+- Spec documented in `docs/roadmap/forest-stress-benchmark-v0.md`
+- Initial metric hook implemented through `collectForestStressMetrics()`
+- Full scene runner not implemented yet
 
 Measure:
 

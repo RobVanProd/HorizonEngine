@@ -31,6 +31,19 @@ export {
   undoAiActionPlanExecution,
 } from './control-plane/plan-executor.js';
 export {
+  runControlPlaneBenchmarkSuite,
+  runControlPlaneBenchmarkTask,
+  createMinimalControlPlaneBenchmarkTasks,
+  collectForestStressMetrics,
+  type ControlPlaneBenchmarkContext,
+  type ControlPlaneBenchmarkTask,
+  type ControlPlaneBenchmarkTaskCheckResult,
+  type ControlPlaneBenchmarkTaskResult,
+  type ControlPlaneBenchmarkSuiteResult,
+  type ControlPlaneBenchmarkUndoController,
+  type ForestStressMetricsSnapshot,
+} from './benchmark/control-plane-benchmark.js';
+export {
   SceneContextLoop,
   type SceneContextLoopOptions,
   type SceneContextSnapshot,

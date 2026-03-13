@@ -477,7 +477,7 @@ The first implementation slice after this design should cover:
 ## Known Limitations In v0
 
 - No semantic world primitives yet.
-- No benchmark harness yet.
+- Benchmark harness support is currently limited to the implemented create/rename/transform slice.
 - No multi-user conflict handling.
 - Runtime undo may remain unsupported initially.
 - Tags may require a lightweight standardization layer if current usage is ad hoc.

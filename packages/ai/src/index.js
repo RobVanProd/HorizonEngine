@@ -9,6 +9,7 @@ export { registerMLCommands } from './ml-commands.js';
 export { registerAdvancedCommands } from './advanced-commands.js';
 export { registerControlPlaneCommands } from './control-plane/control-plane-api.js';
 export { previewAiActionPlan, applyAiActionPlan, applyAiActionPlanWithUndoLog, undoAiActionPlanExecution, } from './control-plane/plan-executor.js';
+export { runControlPlaneBenchmarkSuite, runControlPlaneBenchmarkTask, createMinimalControlPlaneBenchmarkTasks, collectForestStressMetrics, } from './benchmark/control-plane-benchmark.js';
 export { SceneContextLoop } from './scene-context-loop.js';
 export { WebSocketTransport } from './transports/websocket.js';
 export { WorkerTransport } from './transports/worker.js';
