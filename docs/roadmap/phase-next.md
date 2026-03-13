@@ -38,6 +38,7 @@ Current foundation:
 - Editor-backed grouped undo for v0 create, rename, and transform plans
 - Control-plane Benchmark Harness v0 for repeatable preview/apply create, rename, and transform tasks
 - Forest Stress Benchmark v0 spec in `docs/roadmap/forest-stress-benchmark-v0.md`
+- Forest Stress Benchmark Runner v0 for the `first-nature-expedition` scene with structured JSON run output
 
 Next milestones:
 
@@ -46,6 +47,7 @@ Next milestones:
 - Improve snapshot/diff coverage for hierarchy-aware creation and future semantic actions.
 - Add semantic primitives: biome, path, clearing, campsite, landmark, encounter zone, mood profile, weather preset.
 - Extend the benchmark harness beyond the current atomic create/rename/transform slice.
+- Add a browser-accessible entrypoint that executes the forest benchmark runner across all four density tiers on fresh engine instances.
 
 ### B. Lighting System
 
@@ -131,13 +133,14 @@ Completed groundwork already in the repo:
 - AI Control Plane v0 executable slice with structured preview/apply, validation, diffs, and editor undo integration for create/rename/transform.
 - AI Control Plane Benchmark Harness v0 with repeatable preview/apply coverage for create/rename/transform and structured result logging.
 - Forest Stress Benchmark v0 spec plus initial renderer/entity metric snapshot helper.
+- Forest Stress Benchmark Runner v0 with concrete `first-nature-expedition` scene selection, density-tier parameterization, and per-run JSON output.
 
 Open issues and immediate gaps:
 
 - Ground material richness and terrain blending remain weak at close range.
 - Outdoor lighting still needs a more cohesive baseline and better shadow tuning.
 - Foliage needs scalability policies instead of only raw density pushes.
-- Scene budgets and stress benchmarks are only partially surfaced through the new v0 metric helper and still need full runners.
+- Scene budgets and stress benchmarks now have a first concrete forest runner, but still need richer metrics and a multi-run entrypoint.
 - Clouds and atmospheric VFX are still references, not native engine features.
 
 ## Ruthless Priority Order
@@ -159,7 +162,8 @@ Current status:
 
 - Spec documented in `docs/roadmap/forest-stress-benchmark-v0.md`
 - Initial metric hook implemented through `collectForestStressMetrics()`
-- Full scene runner not implemented yet
+- Runner implemented for `first-nature-expedition`
+- Density tiers are parameterized scene profiles, not separate authored variants
 
 Measure:
 

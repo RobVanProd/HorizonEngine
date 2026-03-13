@@ -44,6 +44,17 @@ export {
   type ForestStressMetricsSnapshot,
 } from './benchmark/control-plane-benchmark.js';
 export {
+  runForestStressBenchmarkRun,
+  runForestStressBenchmarkMatrix,
+  serializeForestStressBenchmarkRun,
+  getForestStressBenchmarkOutputPath,
+  type ForestStressBenchmarkContext,
+  type ForestStressBenchmarkSetupResult,
+  type ForestStressBenchmarkRun,
+  type ForestStressBenchmarkStatus,
+  type ForestStressDensityLabel,
+} from './benchmark/forest-stress-benchmark.js';
+export {
   SceneContextLoop,
   type SceneContextLoopOptions,
   type SceneContextSnapshot,

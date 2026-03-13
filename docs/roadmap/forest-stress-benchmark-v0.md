@@ -4,7 +4,7 @@
 
 Define the first repeatable forest-scene benchmark contract for HorizonEngine so dense foliage work can be compared across renderer, content, and AI-assisted scene-editing changes.
 
-This document is a spec in v0. It does not add a full forest benchmark runner yet.
+This document is a v0 spec plus the first implemented runner contract for one concrete scene.
 
 ## Scope In v0
 
@@ -12,12 +12,22 @@ Implemented in this task:
 
 - A minimal AI control-plane benchmark harness for repeatable preview/apply tasks.
 - An initial `collectForestStressMetrics()` helper that records entity, mesh, material, and current renderer frame counters when available.
+- A `forest-stress-benchmark` runner that emits one structured JSON record per run.
+- A concrete scene target: `first-nature-expedition`.
+- Density labels produced by parameter scaling of that scene's grass and foliage density, not by four separately authored scene files.
 
 Specified only in this document:
 
-- The full forest-scene benchmark setup.
-- Density-tier content targets.
-- Comparison criteria across foliage/scalability changes.
+- Future metric expansion beyond the currently implemented counters.
+- Comparison criteria across more advanced scalability systems.
+
+## Selected Scene
+
+The first concrete forest benchmark scene is:
+
+- `first-nature-expedition`
+
+This is the existing editor-demo forest level. The v0 runner treats it as the canonical named forest scene for early benchmark logging.
 
 ## Scene And Setup Assumptions
 
@@ -48,7 +58,21 @@ Forest Stress Benchmark v0 should log at minimum:
 - Mean frame time if available
 - Notes about missing metrics
 
-Future tiers may add visible-entity counts, grass/tree instance counts, buffer residency, and upload pressure once those surfaces exist as stable engine metrics.
+Real metrics implemented now:
+
+- entity count
+- mesh count
+- material count
+- renderer frame counters when available from `engine.pbrRenderer.frameStats`
+
+Not implemented yet and therefore not logged as real metrics:
+
+- visible entity count
+- tree instance count
+- grass instance count
+- residency or buffer-budget metrics
+- frame-time breakdown
+- CPU/GPU bottleneck classification
 
 ## Density Tiers
 
@@ -61,16 +85,25 @@ Density tiers are labels in v0, not hard engine-enforced values yet.
 
 Every logged run must include one of these labels even if the actual density knobs remain scene-specific in v0.
 
+Current `first-nature-expedition` implementation:
+
+- `low`, `medium`, `high`, and `extreme` are created by scaling grass density/blades-per-cell plus foliage scatter density.
+- They are reproducible because the scene seed remains fixed and only the documented density profile changes.
+
 ## Logging Requirements
 
-Each run should emit structured JSON or equivalent machine-readable output containing:
+Each run now emits structured JSON containing:
 
 - benchmark name and version
-- timestamp
-- engine revision/commit if available
-- scene/setup parameters
-- collected metrics
-- warnings for unavailable counters
+- scene name
+- density label
+- run status
+- start and end timestamps
+- elapsed milliseconds
+- canonical output path
+- collected real metrics
+- notes
+- error string when a run fails
 
 If a metric is unavailable on the active platform, the run should log `null` and keep the benchmark valid instead of failing silently.
 
@@ -97,4 +130,4 @@ The forest stress benchmark is the renderer/content scaling counterpart. In the 
 
 ## Next Implementation Step
 
-Turn this spec into a concrete forest-scene runner that captures one named forest demo scene at `low`, `medium`, `high`, and `extreme` density labels using the current renderer metric surface.
+Integrate the concrete `first-nature-expedition` runner into a browser-accessible benchmark entrypoint so all four density labels can be executed against a fresh engine instance and their JSON logs can be collected in one pass.
