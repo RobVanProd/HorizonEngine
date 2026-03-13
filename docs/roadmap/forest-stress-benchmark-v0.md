@@ -15,6 +15,7 @@ Implemented in this task:
 - A `forest-stress-benchmark` runner that emits one structured JSON record per run.
 - A concrete scene target: `first-nature-expedition`.
 - Density labels produced by parameter scaling of that scene's grass and foliage density, not by four separately authored scene files.
+- A browser-accessible entrypoint at `examples/editor-demo/forest-benchmark.html` that runs all four density tiers sequentially on fresh engine instances.
 
 Specified only in this document:
 
@@ -107,6 +108,25 @@ Each run now emits structured JSON containing:
 
 If a metric is unavailable on the active platform, the run should log `null` and keep the benchmark valid instead of failing silently.
 
+## Browser Entry Workflow
+
+Implemented now:
+
+- Start the editor demo dev server.
+- Open `/forest-benchmark.html`.
+- The page runs `low`, `medium`, `high`, and `extreme` sequentially.
+- Each density tier gets a fresh engine instance and temporary DOM host.
+- Each run is surfaced as JSON in the browser console.
+- The full four-record result array is exposed at `window.__HORIZON_FOREST_BENCHMARK_RESULTS__`.
+- The page also offers a one-click JSON download for the combined run array.
+
+Not implemented yet:
+
+- automatic file persistence outside the browser download flow
+- benchmark comparison UI
+- historical run storage
+- one-click integration from the main editor screen
+
 ## Comparison Criteria
 
 v0 comparison is relative, not absolute.
@@ -130,4 +150,4 @@ The forest stress benchmark is the renderer/content scaling counterpart. In the 
 
 ## Next Implementation Step
 
-Integrate the concrete `first-nature-expedition` runner into a browser-accessible benchmark entrypoint so all four density labels can be executed against a fresh engine instance and their JSON logs can be collected in one pass.
+Add a lightweight comparison/report pass that highlights per-tier regressions between two four-run benchmark outputs without introducing a full dashboard.

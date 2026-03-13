@@ -3,6 +3,7 @@ import { Engine } from '@engine/core';
 import { LocalTransform, Visible, WorldMatrix } from '@engine/ecs';
 import {
   getForestStressBenchmarkOutputPath,
+  runForestStressBenchmarkMatrix,
   runForestStressBenchmarkRun,
   serializeForestStressBenchmarkRun,
 } from '@engine/ai';
@@ -76,5 +77,35 @@ describe('forest stress benchmark runner', () => {
       new Date('2026-03-12T21:30:00.000Z'),
     );
     expect(path).toBe('logs/benchmarks/forest-stress-v0/first-nature-expedition/high/2026-03-12T21-30-00-000Z.json');
+  });
+
+  it('orchestrates low/medium/high/extreme with a fresh engine instance per run', async () => {
+    const createdEngines: Engine[] = [];
+    let createContextCalls = 0;
+
+    const runs = await runForestStressBenchmarkMatrix({
+      sceneName: 'first-nature-expedition',
+      createContext: () => {
+        createContextCalls++;
+        const engine = new Engine();
+        createdEngines.push(engine);
+        return { engine };
+      },
+      setupScene: async (context, densityLabel) => {
+        createEntity(context.engine);
+        return {
+          notes: [`density:${densityLabel}`],
+        };
+      },
+    });
+
+    expect(createContextCalls).toBe(4);
+    expect(runs).toHaveLength(4);
+    expect(runs.map((run) => run.densityLabel)).toEqual(['low', 'medium', 'high', 'extreme']);
+    expect(new Set(createdEngines).size).toBe(4);
+    for (const run of runs) {
+      expect(run.status).toBe('completed');
+      expect(run.metrics.entityCount).toBe(1);
+    }
   });
 });
