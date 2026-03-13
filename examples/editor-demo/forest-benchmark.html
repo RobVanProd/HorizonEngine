@@ -8,13 +8,20 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; width: 100%; height: 100%; background: #0b1014; color: #d8e1e8; font: 13px/1.5 'JetBrains Mono', 'Fira Code', monospace; }
     body { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; }
-    #panel { padding: 18px; border-right: 1px solid rgba(120, 140, 160, 0.18); background: linear-gradient(180deg, rgba(11,16,20,0.98), rgba(13,18,23,0.94)); }
+    #panel { padding: 18px; border-right: 1px solid rgba(120, 140, 160, 0.18); background: linear-gradient(180deg, rgba(11,16,20,0.98), rgba(13,18,23,0.94)); overflow: auto; }
     h1 { font-size: 16px; margin: 0 0 8px; color: #eef4f8; }
     p { margin: 0 0 10px; color: #9fb1c1; }
     #status { margin: 10px 0 14px; padding: 10px 12px; border-radius: 8px; background: rgba(50, 78, 94, 0.25); color: #d6edf7; }
     #download-json { padding: 10px 12px; border: 0; border-radius: 8px; background: #78d1ff; color: #0b1014; font: inherit; font-weight: 700; cursor: pointer; }
     #download-json:disabled { cursor: not-allowed; opacity: 0.5; }
     #records { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px solid rgba(120, 140, 160, 0.18); background: rgba(8, 13, 17, 0.8); white-space: pre-wrap; overflow: auto; max-height: calc(100vh - 220px); }
+    .compare-block { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(120, 140, 160, 0.18); }
+    .compare-grid { display: grid; gap: 10px; }
+    .compare-grid label { color: #c5d0d8; font-weight: 600; }
+    .compare-grid textarea { width: 100%; min-height: 120px; resize: vertical; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(120, 140, 160, 0.18); background: rgba(8, 13, 17, 0.8); color: #d8e1e8; font: inherit; }
+    #compare-button { margin-top: 10px; padding: 10px 12px; border: 0; border-radius: 8px; background: #a8ff8a; color: #0b1014; font: inherit; font-weight: 700; cursor: pointer; }
+    #compare-error { margin-top: 10px; color: #ff9e9e; min-height: 1.5em; }
+    #compare-output { margin-top: 10px; padding: 12px; border-radius: 8px; border: 1px solid rgba(120, 140, 160, 0.18); background: rgba(8, 13, 17, 0.8); white-space: pre-wrap; overflow: auto; max-height: 360px; }
     #app { position: relative; width: 100%; height: 100%; }
     .benchmark-host { position: absolute; inset: 0; }
   </style>
@@ -27,6 +34,19 @@
     <div id="status">Waiting to start...</div>
     <button id="download-json" disabled>Download JSON</button>
     <pre id="records"></pre>
+    <section class="compare-block">
+      <h1>Saved Output Compare</h1>
+      <p>Paste baseline and candidate four-run JSON bundles from this page's download output, then compare them tier-by-tier.</p>
+      <div class="compare-grid">
+        <label for="baseline-json">Baseline JSON</label>
+        <textarea id="baseline-json" spellcheck="false" placeholder="Paste baseline forest benchmark JSON array here"></textarea>
+        <label for="candidate-json">Candidate JSON</label>
+        <textarea id="candidate-json" spellcheck="false" placeholder="Paste candidate forest benchmark JSON array here"></textarea>
+      </div>
+      <button id="compare-button">Compare Saved Runs</button>
+      <div id="compare-error"></div>
+      <pre id="compare-output"></pre>
+    </section>
   </aside>
   <main id="app"></main>
   <script type="module" src="./src/forest-benchmark-entry.ts"></script>

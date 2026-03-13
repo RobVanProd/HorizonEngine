@@ -119,6 +119,7 @@ Implemented now:
 - Each run is surfaced as JSON in the browser console.
 - The full four-record result array is exposed at `window.__HORIZON_FOREST_BENCHMARK_RESULTS__`.
 - The page also offers a one-click JSON download for the combined run array.
+- The same page now includes two paste areas for baseline and candidate JSON plus a `Compare Saved Runs` action that renders the structured comparison output inline.
 
 Not implemented yet:
 
@@ -146,6 +147,7 @@ How users provide the two saved outputs:
 - Load the two downloaded JSON bundles from `/forest-benchmark.html`
 - Parse them with `parseForestStressBenchmarkRunSet(...)`
 - Pass the arrays to `compareForestStressBenchmarkRunSets(...)`
+- Or paste them directly into `/forest-benchmark.html` and let the page call those same helpers
 
 Missing tiers or metrics:
 
@@ -176,4 +178,4 @@ The forest stress benchmark is the renderer/content scaling counterpart. In the 
 
 ## Next Implementation Step
 
-Add a tiny browser-side helper on the benchmark page that accepts two pasted JSON bundles and prints the structured comparison output without turning into a dashboard.
+Add a compact text summary layer above the raw comparison JSON to make regressions quicker to scan, still without turning the page into a dashboard.

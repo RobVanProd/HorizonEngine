@@ -5,6 +5,7 @@ import {
   FOREST_STRESS_BENCHMARK_SCENE_NAME,
   setupFirstNatureExpeditionForestStressScene,
 } from './forest-stress-benchmark.js';
+import { comparePastedForestBenchmarkJson } from './forest-benchmark-compare-ui.js';
 
 declare global {
   interface Window {
@@ -17,14 +18,23 @@ const appElement = document.getElementById('app');
 const statusElement = document.getElementById('status');
 const recordsElement = document.getElementById('records');
 const downloadButton = document.getElementById('download-json') as HTMLButtonElement | null;
+const baselineJsonElement = document.getElementById('baseline-json') as HTMLTextAreaElement | null;
+const candidateJsonElement = document.getElementById('candidate-json') as HTMLTextAreaElement | null;
+const compareButton = document.getElementById('compare-button') as HTMLButtonElement | null;
+const compareErrorElement = document.getElementById('compare-error');
+const compareOutputElement = document.getElementById('compare-output');
 
-if (!appElement || !statusElement || !recordsElement) {
+if (!appElement || !statusElement || !recordsElement || !baselineJsonElement || !candidateJsonElement || !compareErrorElement || !compareOutputElement) {
   throw new Error('Forest benchmark page is missing required DOM nodes.');
 }
 
 const app = appElement;
 const status = statusElement;
 const records = recordsElement;
+const baselineJson = baselineJsonElement;
+const candidateJson = candidateJsonElement;
+const compareError = compareErrorElement;
+const compareOutput = compareOutputElement;
 
 let latestResults: ForestStressBenchmarkRun[] = [];
 
@@ -88,6 +98,9 @@ async function runSession(): Promise<ForestStressBenchmarkRun[]> {
 
   const serialized = JSON.stringify(results, null, 2);
   records.textContent = serialized;
+  if (!baselineJson.value.trim()) {
+    baselineJson.value = serialized;
+  }
   for (const run of results) {
     console.log(`[ForestBenchmark] ${run.densityLabel}`, serializeForestStressBenchmarkRun(run));
   }
@@ -138,6 +151,18 @@ function setDownloadEnabled(enabled: boolean): void {
   downloadButton.disabled = !enabled;
 }
 
+function runComparison(): void {
+  const result = comparePastedForestBenchmarkJson(baselineJson.value, candidateJson.value);
+  if (!result.ok) {
+    compareError.textContent = result.error ?? 'Comparison failed';
+    compareOutput.textContent = '';
+    return;
+  }
+  compareError.textContent = '';
+  compareOutput.textContent = result.output;
+  console.log('[ForestBenchmark] comparison', result.output);
+}
+
 downloadButton?.addEventListener('click', () => {
   if (latestResults.length === 0) return;
   const blob = new Blob([JSON.stringify(latestResults, null, 2)], { type: 'application/json' });
@@ -147,6 +172,10 @@ downloadButton?.addEventListener('click', () => {
   link.download = `${FOREST_STRESS_BENCHMARK_SCENE_NAME}-forest-benchmark-v0.json`;
   link.click();
   URL.revokeObjectURL(url);
+});
+
+compareButton?.addEventListener('click', () => {
+  runComparison();
 });
 
 window.runFirstNatureForestBenchmark = runSession;
